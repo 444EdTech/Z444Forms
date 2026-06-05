@@ -23,6 +23,12 @@ service cloud.firestore {
         && data.department is string && data.department.size() > 0 && data.department.size() <= 50
         && data.createdAt is timestamp;
     }
+
+    // Validate global reminder flags
+    function isValidReminder(data) {
+      return (data.june6_8pm_sent == null || data.june6_8pm_sent is bool)
+        && (data.june7_10am_sent == null || data.june7_10am_sent is bool);
+    }
     
     match /registrations/{registrationId} {
       // Anyone can create a registration, provided it is valid and well-formed
@@ -33,6 +39,11 @@ service cloud.firestore {
       
       // Reading registrations is strictly isolated to the verified masterclass host email
       allow list, get: if request.auth != null && request.auth.token.email == '444edtech@gmail.com' && request.auth.token.email_verified == true;
+    }
+
+    match /reminders/{reminderId} {
+      // Anyone can read and update the global reminder flags if formatted correctly (enables headless container syncing)
+      allow read, write: if isValidId(reminderId) && (request.resource == null || isValidReminder(request.resource.data));
     }
   }
 }

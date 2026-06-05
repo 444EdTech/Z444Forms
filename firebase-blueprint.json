@@ -38,12 +38,31 @@
         }
       },
       "required": ["name", "email", "phone", "btechYear", "department", "createdAt"]
+    },
+    "ReminderStatus": {
+      "title": "Global Reminder Status Tracking",
+      "description": "Maintains persistent global flags to track state status of email reminder deliveries of June 6th 8PM & June 7th 10AM broadcasts",
+      "type": "object",
+      "properties": {
+        "june6_8pm_sent": {
+          "type": "boolean",
+          "description": "Has the June 6th 8PM reminder email been broadcasted"
+        },
+        "june7_10am_sent": {
+          "type": "boolean",
+          "description": "Has the June 7th 10AM reminder email been broadcasted"
+        }
+      }
     }
   },
   "firestore": {
     "/registrations/{registrationId}": {
       "schema": "Registration",
       "description": "Collection of registrations for the Z444 Masterclass on June 7th"
+    },
+    "/reminders/{reminderId}": {
+      "schema": "ReminderStatus",
+      "description": "Collection monitoring global background delivery statuses"
     }
   }
 }

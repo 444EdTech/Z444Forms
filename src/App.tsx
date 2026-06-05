@@ -7,6 +7,7 @@ import React, { useState } from "react";
 import RegistrationForm from "./components/RegistrationForm";
 import AdminDashboard from "./components/AdminDashboard";
 import { StudentRegistration } from "./types";
+import Z444Logo from "./components/Z444Logo";
 import { 
   GraduationCap, 
   MapPin, 
@@ -82,16 +83,14 @@ export default function App() {
         <header className="mb-8 md:mb-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-200/60 pb-6">
           <div className="flex gap-3.5 items-center">
             {/* Elegant logo mark */}
-            <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-600/20 shrink-0 font-extrabold text-xl tracking-tight">
-              Z4
-            </div>
+            <Z444Logo variant="black-bg" size={56} className="shadow-lg hover:scale-115 active:scale-95 transition-all outline-none shrink-0" />
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#ef4444] bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-full">
-                  Masterclass series
+                  Z444
                 </span>
               </div>
-              <h1 className="text-xl font-extrabold tracking-tight text-slate-900 mt-1">Z444 Mastering Portals</h1>
+              <h1 className="text-xl font-extrabold tracking-tight text-slate-900 mt-1">Z444 Masterclass</h1>
             </div>
           </div>
 
@@ -113,7 +112,7 @@ export default function App() {
           ) : (
             <div className="flex items-center gap-2 text-slate-400 text-xs">
               <ShieldCheck className="w-4 h-4 text-emerald-500" />
-              <span>Full-Spectrum Registration Protected</span>
+              <span>Registration Form</span>
             </div>
           )}
         </header>
