@@ -132,6 +132,49 @@ function generateIcalEvent(studentName: string, studentEmail: string, eventId: s
   ].join("\r\n");
 }
 
+// Let's declare our diagnostics object to safely identify cloud database status on production hosts (e.g. Vercel)
+const firebaseDiagnostics: {
+  initialized: boolean;
+  projectId: string | null;
+  databaseId: string | null;
+  hasServiceAccountEnv: boolean;
+  serviceAccountEnvLength: number;
+  hasClientEmailEnv: boolean;
+  hasPrivateKeyEnv: boolean;
+  hasFirebaseConfigFile: boolean;
+  initAttempted: boolean;
+  initSuccess: boolean;
+  initError: string | null;
+  serviceAccountParseError: string | null;
+  isServiceAccountValidJson: boolean;
+  detectedCredentialType: string;
+  actualDbNull: boolean;
+  lastFetchAttemptTime: string | null;
+  lastFetchSuccess: boolean;
+  lastFetchError: string | null;
+  lastFetchCount: number;
+} = {
+  initialized: false,
+  projectId: null,
+  databaseId: null,
+  hasServiceAccountEnv: !!process.env.FIREBASE_SERVICE_ACCOUNT,
+  serviceAccountEnvLength: process.env.FIREBASE_SERVICE_ACCOUNT ? process.env.FIREBASE_SERVICE_ACCOUNT.length : 0,
+  hasClientEmailEnv: !!process.env.FIREBASE_CLIENT_EMAIL,
+  hasPrivateKeyEnv: !!process.env.FIREBASE_PRIVATE_KEY,
+  hasFirebaseConfigFile: false,
+  initAttempted: false,
+  initSuccess: false,
+  initError: null,
+  serviceAccountParseError: null,
+  isServiceAccountValidJson: false,
+  detectedCredentialType: "none",
+  actualDbNull: true,
+  lastFetchAttemptTime: null,
+  lastFetchSuccess: false,
+  lastFetchError: null,
+  lastFetchCount: 0
+};
+
 // Initialize Firebase Admin if config exists or env vars are present
 let firestoreDb: Firestore | null = null;
 const envProjectId = process.env.FIREBASE_PROJECT_ID;
@@ -148,17 +191,21 @@ let credentialOption: any = undefined;
 if (serviceAccountJson) {
   try {
     const parsedCreds = JSON.parse(serviceAccountJson);
+    firebaseDiagnostics.isServiceAccountValidJson = true;
+    firebaseDiagnostics.detectedCredentialType = "service_account_json";
     credentialOption = admin.credential.cert(parsedCreds);
     if (!projectId) {
       projectId = parsedCreds.project_id;
     }
-  } catch (jsonErr) {
+  } catch (jsonErr: any) {
+    firebaseDiagnostics.serviceAccountParseError = jsonErr?.message || String(jsonErr);
     console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT env variable:", jsonErr);
   }
 }
 
 // 2. Try working with separate Service Account variables:
 if (!credentialOption && clientEmail && privateKey) {
+  firebaseDiagnostics.detectedCredentialType = "separate_service_account_env";
   if (!projectId && clientEmail.includes("@")) {
     projectId = clientEmail.split("@")[1]?.split(".")[0];
   }
@@ -173,6 +220,7 @@ if (!credentialOption && clientEmail && privateKey) {
 if (!projectId) {
   const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
   if (fs.existsSync(firebaseConfigPath)) {
+    firebaseDiagnostics.hasFirebaseConfigFile = true;
     try {
       const rawConfig = fs.readFileSync(firebaseConfigPath, "utf-8");
       const firebaseConfig = JSON.parse(rawConfig);
@@ -184,8 +232,12 @@ if (!projectId) {
   }
 }
 
+firebaseDiagnostics.projectId = projectId || null;
+firebaseDiagnostics.databaseId = databaseId || null;
+
 // Ensure we have a projectId to initialize
 if (projectId) {
+  firebaseDiagnostics.initAttempted = true;
   try {
     let appInstance;
     if (admin.apps.length === 0) {
@@ -202,8 +254,12 @@ if (projectId) {
     } else {
       firestoreDb = getFirestore(appInstance);
     }
+    firebaseDiagnostics.initialized = true;
+    firebaseDiagnostics.initSuccess = true;
+    firebaseDiagnostics.actualDbNull = false;
     console.log(`Firebase Admin initialized successfully (Project: ${projectId}, Database: ${databaseId})`);
-  } catch (error) {
+  } catch (error: any) {
+    firebaseDiagnostics.initError = error?.message || String(error);
     console.error("Failed to initialize Firebase Admin:", error);
   }
 } else {
@@ -455,6 +511,10 @@ async function handleGetRegistrations(req: any, res: any) {
     let list: any[] = [];
     let source = "local";
 
+    firebaseDiagnostics.lastFetchAttemptTime = new Date().toISOString();
+    firebaseDiagnostics.lastFetchSuccess = false;
+    firebaseDiagnostics.lastFetchError = null;
+
     if (firestoreDb) {
       try {
         const querySnapshot = await firestoreDb.collection("registrations").get();
@@ -470,15 +530,23 @@ async function handleGetRegistrations(req: any, res: any) {
           });
         });
         source = "firestore";
+        firebaseDiagnostics.lastFetchSuccess = true;
+        firebaseDiagnostics.lastFetchCount = list.length;
         console.log(`Fetched ${list.length} records directly from secure Cloud Firestore`);
       } catch (firestoreErr: any) {
+        firebaseDiagnostics.lastFetchError = firestoreErr?.message || String(firestoreErr);
         if (firestoreErr?.message?.includes("PERMISSION_DENIED")) {
           console.log("Firestore database access restricted / pending credentials. Relying on local register file backup.");
         } else {
           console.log("Firestore query notification:", firestoreErr?.message || firestoreErr);
         }
       }
+    } else {
+      firebaseDiagnostics.lastFetchError = "firestoreDb is null / not initialized";
     }
+
+    // Determine if the Firestore collection was successfully queried but didn't have any records yet
+    const firestoreQueryWorkedButEmpty = (firestoreDb && firebaseDiagnostics.lastFetchSuccess && list.length === 0);
 
     // Fallback if list is empty or firestore couldn't be requested
     if (list.length === 0) {
@@ -486,9 +554,19 @@ async function handleGetRegistrations(req: any, res: any) {
       source = "local";
     }
 
-    return res.status(200).json({ success: true, count: list.length, registrations: list, dataSource: source });
+    return res.status(200).json({ 
+      success: true, 
+      count: list.length, 
+      registrations: list, 
+      dataSource: firestoreQueryWorkedButEmpty ? "firestore_empty_fallback_local" : source,
+      firebaseDiagnostics: firebaseDiagnostics
+    });
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ 
+      success: false, 
+      error: err.message,
+      firebaseDiagnostics: firebaseDiagnostics
+    });
   }
 }
 
