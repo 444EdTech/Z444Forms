@@ -1,0 +1,49 @@
+{
+  "entities": {
+    "Registration": {
+      "title": "Z444 Masterclass Registration",
+      "description": "Student registration entries for Z444 masterclass to bridge college with real industry expectations, resume tips, job search strategies, and internship tactics.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique registration entry ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "The student's full name"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The student's email ID"
+        },
+        "phone": {
+          "type": "string",
+          "description": "The student's phone number"
+        },
+        "btechYear": {
+          "type": "string",
+          "enum": ["1", "2", "3", "4", "Completed"],
+          "description": "The student's B.Tech study year"
+        },
+        "department": {
+          "type": "string",
+          "description": "The student's engineering department"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when registration was submitted"
+        }
+      },
+      "required": ["name", "email", "phone", "btechYear", "department", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/registrations/{registrationId}": {
+      "schema": "Registration",
+      "description": "Collection of registrations for the Z444 Masterclass on June 7th"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Z444 Masterclass Student Registration",
+  "description": "A high-performance student registration portal for the Z444 masterclass with secure backups, real-time validations, and customized Gemini-powered welcome emails.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

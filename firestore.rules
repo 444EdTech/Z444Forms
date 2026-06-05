@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global safety net: default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+    
+    // Check if ID matches requirements
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    
+    // Validate registration body schema
+    function isValidRegistration(data) {
+      return data.keys().hasAll(['name', 'email', 'phone', 'btechYear', 'department', 'createdAt'])
+        && data.keys().size() == 6
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.email is string && data.email.size() > 3 && data.email.size() <= 100 && data.email.matches('^[^@]+@[^@]+\\.[^@]+$')
+        && data.phone is string && data.phone.size() >= 8 && data.phone.size() <= 15
+        && data.btechYear is string && (data.btechYear == '1' || data.btechYear == '2' || data.btechYear == '3' || data.btechYear == '4' || data.btechYear == 'Completed')
+        && data.department is string && data.department.size() > 0 && data.department.size() <= 50
+        && data.createdAt is timestamp;
+    }
+    
+    match /registrations/{registrationId} {
+      // Anyone can create a registration, provided it is valid and well-formed
+      allow create: if isValidId(registrationId) && isValidRegistration(request.resource.data);
+      
+      // Disallow all client-side updates and deletes to preserve data integrity and protect entries
+      allow update, delete: if false;
+      
+      // Reading registrations is strictly isolated to the verified masterclass host email
+      allow list, get: if request.auth != null && request.auth.token.email == '444edtech@gmail.com' && request.auth.token.email_verified == true;
+    }
+  }
+}
