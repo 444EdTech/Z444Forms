@@ -614,133 +614,158 @@ async function broadcastReminder(reminderKey: "june6_8pm_sent" | "june7_10am_sen
   }
 }
 
+async function checkAndTriggerReminders(): Promise<{ checked: boolean; triggered: boolean }> {
+  const status = await syncReminderStatus();
+  const now = new Date();
+
+  // Trigger point 1: June 6th 2026 at 8:00 PM IST => June 6th 14:30:00 UTC
+  const targetJune6_8pm = new Date("2026-06-06T14:30:00Z");
+  
+  // Trigger point 2: June 7th 2026 at 10:00 AM IST => June 7th 04:30:00 UTC
+  const targetJune7_10am = new Date("2026-06-07T04:30:00Z");
+  
+  let triggered = false;
+
+  if (!status.june6_8pm_sent && now >= targetJune6_8pm) {
+    const subject = "[URGENT] Z444 Masterclass starts Tomorrow Morning at 11:00 AM IST!";
+    const fallback = `
+      <div style="font-family: sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+        <div style="background-color: #0f172a; padding: 24px; text-align: center; color: #ffffff;">
+          <h1 style="margin: 0; font-size: 20px; font-weight: 800;">Get Ready for the Z444 Masterclass Tomorrow!</h1>
+          <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 13px;">Bridging the Gap: Academic Studies to Industry Job Roles</p>
+        </div>
+        <div style="padding: 24px; background-color: #ffffff;">
+          <p>Hello \${studentName},</p>
+          <p>This is a quick reminder that the highly anticipated <strong>Z444 Masterclass</strong> is scheduled to start <strong>tomorrow Sunday at 11:00 AM (IST) sharp</strong>.</p>
+          
+          <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 16px; margin: 20px 0; border-radius: 8px;">
+            <p style="margin: 0; font-weight: 700; color: #1e3a8a; font-size: 13.5px;">⚡ Live Joining Details:</p>
+            <p style="margin: 6px 0 0 0; font-size: 14px; line-height: 1.6; color: #1e293b;">
+              🗓️ <strong>Date:</strong> Tomorrow, Sunday, June 7th, 2026<br>
+              ⏰ <strong>Time:</strong> 11:00 AM Indian Standard Time (IST)<br>
+              📍 <strong>Live Room:</strong> Google Meet (Direct Entry Code)<br>
+              🔗 <strong>Link to Join:</strong> <a href="https://meet.google.com/bwi-xehm-peg" style="color: #3b82f6; font-weight: bold; text-decoration: underline;">https://meet.google.com/bwi-xehm-peg</a>
+            </p>
+          </div>
+
+          <p>Make sure to bring a notebook, pen, and your existing draft resume. We will dive straight into resume writing tactics, linkedin templates, cold emailing hacks, and engineering workflows to secure premium jobs and internships.</p>
+
+          <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 20px 0;">
+          <p style="font-size: 13px; color: #64748b; margin-bottom: 0;">
+            Warm regards,<br>
+            <strong>Z444 masterclass team</strong>
+          </p>
+        </div>
+      </div>
+    `;
+    const aiPrompt = `Write a professional, warm, yet urgent evening email reminder for the Z444 Masterclass which starts tomorrow morning at 11:00 AM IST.
+Direct them to join Google Meet link: "https://meet.google.com/bwi-xehm-peg". Tell them to bring a pen, paper/notebook, and a copy of their draft resume (which we will tune live!). Emphasize starting sharp. Sign off with 'Warm regards Z444 masterclass team'.`;
+    
+    await broadcastReminder("june6_8pm_sent", subject, fallback, aiPrompt);
+    triggered = true;
+  }
+
+  if (!status.june7_10am_sent && now >= targetJune7_10am) {
+    const subject = "[Starting in 1 Hour!] Z444 Masterclass Live Classroom Link - 11:00 AM IST";
+    const fallback = `
+      <div style="font-family: sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+        <div style="background-color: #4f46e5; padding: 24px; text-align: center; color: #ffffff;">
+          <h1 style="margin: 0; font-size: 22px; font-weight: 800;">Z444 Live in 1 Hour! 🚀</h1>
+          <p style="margin: 4px 0 0 0; color: #c7d2fe; font-size: 13px;">Bridging the Gap: College Studies to Industry Expectations</p>
+        </div>
+        <div style="padding: 24px; background-color: #ffffff;">
+          <p>Hello \${studentName},</p>
+          <p>This is it! Exactly <strong>1 hour left</strong> before we go live for the highly anticipated <strong>Z444 Masterclass</strong>.</p>
+          
+          <div style="background-color: #f5f3ff; border-left: 4px solid #6366f1; padding: 16px; margin: 20px 0; border-radius: 8px;">
+            <p style="margin: 0; font-weight: 700; color: #4338ca; font-size: 13.5px;">🔥 Access Information:</p>
+            <p style="margin: 6px 0 0 0; font-size: 14px; line-height: 1.6; color: #1e293b;">
+              ⏰ <strong>Time:</strong> 11:00 AM Indian Standard Time (IST) Sharp<br>
+              📍 <strong>Venue:</strong> Google Meet live feed<br>
+              🔗 <strong>Direct Meet Join link:</strong> <a href="https://meet.google.com/bwi-xehm-peg" style="color: #6366f1; font-weight: bold; text-decoration: underline;">https://meet.google.com/bwi-xehm-peg</a>
+            </p>
+          </div>
+
+          <p>Ensure your device speakers are working, keep your draft resume and a book nearby, and login 5 minutes early to secure your spot. Let's build your pathway to a high-paying career starting today.</p>
+
+          <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 20px 0;">
+          <p style="font-size: 13px; color: #64748b; margin-bottom: 0;">
+            Warm regards,<br>
+            <strong>Z444 masterclass team</strong>
+          </p>
+        </div>
+      </div>
+    `;
+    const aiPrompt = `Write an exciting final direct-call email reminder for the Z444 Masterclass starting in exactly 1 hour (today Sunday at 11:00 AM IST).
+Instruct them to log in 5 mins early to avoid buffer issues or platform capacity limitations. Highlight the direct Google Meet join link: "https://meet.google.com/bwi-xehm-peg". Keep it energetic and action-prompting. Sign off with 'Warm regards Z444 masterclass team'.`;
+    
+    await broadcastReminder("june7_10am_sent", subject, fallback, aiPrompt);
+    triggered = true;
+  }
+
+  return { checked: true, triggered };
+}
+
 function startReminderDaemon() {
   console.log("[REMINDER DAEMON] Initialized background polling. Checking every 2 minutes.");
   
   // Checking every 2 minutes for precise triggering
   setInterval(async () => {
     try {
-      const status = await syncReminderStatus();
-      const now = new Date();
-
-      // Trigger point 1: June 6th 2026 at 8:00 PM IST => June 6th 14:30:00 UTC
-      const targetJune6_8pm = new Date("2026-06-06T14:30:00Z");
-      
-      // Trigger point 2: June 7th 2026 at 10:00 AM IST => June 7th 04:30:00 UTC
-      const targetJune7_10am = new Date("2026-06-07T04:30:00Z");
-
-      if (!status.june6_8pm_sent && now >= targetJune6_8pm) {
-        const subject = "[URGENT] Z444 Masterclass starts Tomorrow Morning at 11:00 AM IST!";
-        const fallback = `
-          <div style="font-family: sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-            <div style="background-color: #0f172a; padding: 24px; text-align: center; color: #ffffff;">
-              <h1 style="margin: 0; font-size: 20px; font-weight: 800;">Get Ready for the Z444 Masterclass Tomorrow!</h1>
-              <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 13px;">Bridging the Gap: Academic Studies to Industry Job Roles</p>
-            </div>
-            <div style="padding: 24px; background-color: #ffffff;">
-              <p>Hello \${studentName},</p>
-              <p>This is a quick reminder that the highly anticipated <strong>Z444 Masterclass</strong> is scheduled to start <strong>tomorrow Sunday at 11:00 AM (IST) sharp</strong>.</p>
-              
-              <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 16px; margin: 20px 0; border-radius: 8px;">
-                <p style="margin: 0; font-weight: 700; color: #1e3a8a; font-size: 13.5px;">⚡ Live Joining Details:</p>
-                <p style="margin: 6px 0 0 0; font-size: 14px; line-height: 1.6; color: #1e293b;">
-                  🗓️ <strong>Date:</strong> Tomorrow, Sunday, June 7th, 2026<br>
-                  ⏰ <strong>Time:</strong> 11:00 AM Indian Standard Time (IST)<br>
-                  📍 <strong>Live Room:</strong> Google Meet (Direct Entry Code)<br>
-                  🔗 <strong>Link to Join:</strong> <a href="https://meet.google.com/bwi-xehm-peg" style="color: #3b82f6; font-weight: bold; text-decoration: underline;">https://meet.google.com/bwi-xehm-peg</a>
-                </p>
-              </div>
-
-              <p>Make sure to bring a notebook, pen, and your existing draft resume. We will dive straight into resume writing tactics, linkedin templates, cold emailing hacks, and engineering workflows to secure premium jobs and internships.</p>
-
-              <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 20px 0;">
-              <p style="font-size: 13px; color: #64748b; margin-bottom: 0;">
-                Warm regards,<br>
-                <strong>Z444 masterclass team</strong>
-              </p>
-            </div>
-          </div>
-        `;
-        const aiPrompt = `Write a professional, warm, yet urgent evening email reminder for the Z444 Masterclass which starts tomorrow morning at 11:00 AM IST.
-Direct them to join Google Meet link: "https://meet.google.com/bwi-xehm-peg". Tell them to bring a pen, paper/notebook, and a copy of their draft resume (which we will tune live!). Emphasize starting sharp. Sign off with 'Warm regards Z444 masterclass team'.`;
-        
-        await broadcastReminder("june6_8pm_sent", subject, fallback, aiPrompt);
-      }
-
-      if (!status.june7_10am_sent && now >= targetJune7_10am) {
-        const subject = "[Starting in 1 Hour!] Z444 Masterclass Live Classroom Link - 11:00 AM IST";
-        const fallback = `
-          <div style="font-family: sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-            <div style="background-color: #4f46e5; padding: 24px; text-align: center; color: #ffffff;">
-              <h1 style="margin: 0; font-size: 22px; font-weight: 800;">Z444 Live in 1 Hour! 🚀</h1>
-              <p style="margin: 4px 0 0 0; color: #c7d2fe; font-size: 13px;">Bridging the Gap: College Studies to Industry Expectations</p>
-            </div>
-            <div style="padding: 24px; background-color: #ffffff;">
-              <p>Hello \${studentName},</p>
-              <p>This is it! Exactly <strong>1 hour left</strong> before we go live for the highly anticipated <strong>Z444 Masterclass</strong>.</p>
-              
-              <div style="background-color: #f5f3ff; border-left: 4px solid #6366f1; padding: 16px; margin: 20px 0; border-radius: 8px;">
-                <p style="margin: 0; font-weight: 700; color: #4338ca; font-size: 13.5px;">🔥 Access Information:</p>
-                <p style="margin: 6px 0 0 0; font-size: 14px; line-height: 1.6; color: #1e293b;">
-                  ⏰ <strong>Time:</strong> 11:00 AM Indian Standard Time (IST) Sharp<br>
-                  📍 <strong>Venue:</strong> Google Meet live feed<br>
-                  🔗 <strong>Direct Meet Join link:</strong> <a href="https://meet.google.com/bwi-xehm-peg" style="color: #6366f1; font-weight: bold; text-decoration: underline;">https://meet.google.com/bwi-xehm-peg</a>
-                </p>
-              </div>
-
-              <p>Ensure your device speakers are working, keep your draft resume and a book nearby, and login 5 minutes early to secure your spot. Let's build your pathway to a high-paying career starting today.</p>
-
-              <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 20px 0;">
-              <p style="font-size: 13px; color: #64748b; margin-bottom: 0;">
-                Warm regards,<br>
-                <strong>Z444 masterclass team</strong>
-              </p>
-            </div>
-          </div>
-        `;
-        const aiPrompt = `Write an exciting final direct-call email reminder for the Z444 Masterclass starting in exactly 1 hour (today Sunday at 11:00 AM IST).
-Instruct them to log in 5 mins early to avoid buffer issues or platform capacity limitations. Highlight the direct Google Meet join link: "https://meet.google.com/bwi-xehm-peg". Keep it energetic and action-prompting. Sign off with 'Warm regards Z444 masterclass team'.`;
-        
-        await broadcastReminder("june7_10am_sent", subject, fallback, aiPrompt);
-      }
-
+      await checkAndTriggerReminders();
     } catch (daemonLoopErr) {
       console.error("[REMINDER DAEMON] Loop tick processing error:", daemonLoopErr);
     }
   }, 120000); // Polling checks run secure background interval every 2 minutes (120,000ms)
 }
 
-// Start the daemon running on container startup
-startReminderDaemon();
+// Start the daemon running on container startup (Only if not in a serverless environment like Vercel)
+if (!process.env.VERCEL) {
+  startReminderDaemon();
+}
 
 // Check Server Health
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", firebaseAvailable: !!firestoreDb, geminiAvailable: !!ai });
 });
 
+// Vercel Cron Trigger Endpoint for serverless scheduled events
+app.get("/api/cron-reminders", async (req, res) => {
+  try {
+    const result = await checkAndTriggerReminders();
+    res.json({ success: true, message: "Reminders evaluation complete", ...result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || err });
+  }
+});
+
 // --- VITE MIDDLEWARE AND SPA FALLBACK ---
 
-if (process.env.NODE_ENV !== "production") {
-  createViteServer({
-    server: { middlewareMode: true },
-    appType: "spa",
-  }).then((vite) => {
-    app.use(vite.middlewares);
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`[Vite Dev Mode] Server listening on http://localhost:${PORT}`);
+if (!process.env.VERCEL) {
+  if (process.env.NODE_ENV !== "production") {
+    createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    }).then((vite) => {
+      app.use(vite.middlewares);
+      app.listen(PORT, "0.0.0.0", () => {
+        console.log(`[Vite Dev Mode] Server listening on http://localhost:${PORT}`);
+      });
+    }).catch((err) => {
+      console.error("Vite server initialization failed:", err);
     });
-  }).catch((err) => {
-    console.error("Vite server initialization failed:", err);
-  });
-} else {
-  const distPath = path.join(process.cwd(), "dist");
-  app.use(express.static(distPath));
-  // In Express v4, use app.get('*', ...)
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(distPath, "index.html"));
-  });
+  } else {
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
+    // In Express v4, use app.get('*', ...)
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Production Mode] Server listening on http://localhost:${PORT}`);
-  });
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`[Production Mode] Server listening on http://localhost:${PORT}`);
+    });
+  }
 }
+
+export default app;
