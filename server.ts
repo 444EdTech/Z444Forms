@@ -107,29 +107,49 @@ function generateIcalEvent(studentName: string, studentEmail: string, eventId: s
   ].join("\r\n");
 }
 
-// Initialize Firebase Admin if config exists
+// Initialize Firebase Admin if config exists or env vars are present
 let firestoreDb: Firestore | null = null;
-const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
-if (fs.existsSync(firebaseConfigPath)) {
+const envProjectId = process.env.FIREBASE_PROJECT_ID;
+const envDatabaseId = process.env.FIREBASE_DATABASE_ID;
+
+if (envProjectId && envDatabaseId) {
   try {
-    const rawConfig = fs.readFileSync(firebaseConfigPath, "utf-8");
-    const firebaseConfig = JSON.parse(rawConfig);
     let appInstance;
     if (admin.apps.length === 0) {
       appInstance = admin.initializeApp({
-        projectId: firebaseConfig.projectId,
+        projectId: envProjectId,
       });
     } else {
       appInstance = admin.apps[0];
     }
-    // Specifying custom database ID for Applet Firestore isolation using official getFirestore ESM function
-    firestoreDb = getFirestore(appInstance, firebaseConfig.firestoreDatabaseId);
-    console.log("Firebase Admin initialized successfully on backend server");
+    firestoreDb = getFirestore(appInstance, envDatabaseId);
+    console.log("Firebase Admin initialized successfully using environment variables");
   } catch (error) {
-    console.error("Failed to initialize Firebase Admin on backend server:", error);
+    console.error("Failed to initialize Firebase Admin using environment variables:", error);
   }
 } else {
-  console.log("firebase-applet-config.json not found. Backend will operate using local JSON backup.");
+  const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
+  if (fs.existsSync(firebaseConfigPath)) {
+    try {
+      const rawConfig = fs.readFileSync(firebaseConfigPath, "utf-8");
+      const firebaseConfig = JSON.parse(rawConfig);
+      let appInstance;
+      if (admin.apps.length === 0) {
+        appInstance = admin.initializeApp({
+          projectId: firebaseConfig.projectId,
+        });
+      } else {
+        appInstance = admin.apps[0];
+      }
+      // Specifying custom database ID for Applet Firestore isolation using official getFirestore ESM function
+      firestoreDb = getFirestore(appInstance, firebaseConfig.firestoreDatabaseId);
+      console.log("Firebase Admin initialized successfully from firebase-applet-config.json");
+    } catch (error) {
+      console.error("Failed to initialize Firebase Admin from firebase-applet-config.json:", error);
+    }
+  } else {
+    console.log("Firebase config not found (no env variables or firebase-applet-config.json). Backend will operate using local JSON backup.");
+  }
 }
 
 // Initialize Gemini SDK with lazy validation
