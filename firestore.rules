@@ -14,8 +14,9 @@ service cloud.firestore {
     
     // Validate registration body schema
     function isValidRegistration(data) {
-      return data.keys().hasAll(['name', 'email', 'phone', 'btechYear', 'department', 'createdAt'])
-        && data.keys().size() == 6
+      return data.keys().hasAll(['id', 'name', 'email', 'phone', 'btechYear', 'department', 'createdAt'])
+        && data.keys().size() == 7
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
         && data.name is string && data.name.size() > 0 && data.name.size() <= 100
         && data.email is string && data.email.size() > 3 && data.email.size() <= 100 && data.email.matches('^[^@]+@[^@]+\\.[^@]+$')
         && data.phone is string && data.phone.size() >= 8 && data.phone.size() <= 15

@@ -229,27 +229,7 @@ app.post("/api/register", async (req, res) => {
     // 1. Save Locally (Durable backup fallback)
     saveLocalRegistration(registrationItem);
 
-    // 2. Save to Firestore if available
-    let savedToCloud = false;
-    if (firestoreDb) {
-      try {
-        const docRef = firestoreDb.collection("registrations").doc(registrationId);
-        await docRef.set({
-          ...registrationItem,
-          createdAt: FieldValue.serverTimestamp()
-        });
-        savedToCloud = true;
-        console.log(`Saved registration ${registrationId} securely to Cloud Firestore`);
-      } catch (firestoreError: any) {
-        if (firestoreError?.message?.includes("PERMISSION_DENIED")) {
-          console.log("Firestore sync inactive / pending credentials - registration locally backed up successfully");
-        } else {
-          console.log("Firestore sync notification:", firestoreError?.message || firestoreError);
-        }
-      }
-    }
-    
-    // 3. Prepare Confirming Email directly using data provided (deterministic & extremely fast)
+    // 2. Prepare Confirming Email directly using data provided (deterministic & extremely fast)
     let emailSubject = "Confirmed: Z444 Masterclass Admission & Direct Entry Link - June 7th 11:00 AM IST";
     
     let emailHtml = `
@@ -319,94 +299,112 @@ app.post("/api/register", async (req, res) => {
         </div>
       </div>
     `;
- 
-    // 4. Send email to student and host (444edtech@gmail.com)
-    let emailSent = false;
-    let transportDetails = "Log Only";
- 
+
+    // 3. Dispatch Cloud syncing and Email sending as an asynchronous, non-blocking background queue task
     const smtpUser = process.env.SMTP_USER || "444edtech@gmail.com";
     const smtpPass = process.env.SMTP_PASS;
     const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
     const smtpPort = parseInt(process.env.SMTP_PORT || "587");
     const smtpFrom = process.env.SMTP_FROM || `Z444 Masterclass <${smtpUser}>`;
- 
-    if (smtpPass) {
-      try {
-        const transporter = nodemailer.createTransport({
-          host: smtpHost,
-          port: smtpPort,
-          secure: smtpPort === 465, // true for 465, false for other ports e.g. 587
-          auth: {
-            user: smtpUser,
-            pass: smtpPass
-          }
-        });
- 
-        // Send to Student
-        const icalContent = generateIcalEvent(registrationItem.name, registrationItem.email, registrationItem.id);
-        await transporter.sendMail({
-          from: smtpFrom,
-          to: registrationItem.email,
-          subject: `Confirmed: Z444 Masterclass Direct Entry Invitation - June 7th 11:00 AM IST`,
-          html: emailHtml,
-          icalEvent: {
-            filename: "invite.ics",
-            method: "REQUEST",
-            content: icalContent
-          },
-          alternatives: [
-            {
-              contentType: 'text/calendar; charset="utf-8"; method=REQUEST',
-              content: icalContent
-            }
-          ]
-        });
- 
-        // Send to Host (Admin Mail)
-        await transporter.sendMail({
-          from: smtpFrom,
-          to: "444edtech@gmail.com",
-          subject: `New Z444 Masterclass Sign-up: ${registrationItem.name} (${registrationItem.department})`,
-          html: `
-            <h3>New Z444 Masterclass Registration received!</h3>
-            <p>Here are the student registration details:</p>
-            <ul>
-              <li><strong>Name:</strong> ${registrationItem.name}</li>
-              <li><strong>Email:</strong> ${registrationItem.email}</li>
-              <li><strong>Phone:</strong> ${registrationItem.phone}</li>
-              <li><strong>B.Tech Year:</strong> ${registrationItem.btechYear}</li>
-              <li><strong>Department:</strong> ${registrationItem.department}</li>
-              <li><strong>Registrant ID:</strong> ${registrationItem.id}</li>
-              <li><strong>Submitted At:</strong> ${registrationItem.createdAt}</li>
-            </ul>
-            <p>A direct registration invitation and Calendar link has been sent out to the student.</p>
-          `
-        });
- 
-        emailSent = true;
-        transportDetails = "Nodemailer SMTP";
-        console.log(`Emails dispatched successfully to student (${registrationItem.email}) and host (444edtech@gmail.com)`);
-      } catch (nodemailerError) {
-        console.error("Nodemailer SMTP dispatch failed:", nodemailerError);
-        transportDetails = "Nodemailer Failed (SMTP Error)";
-      }
-    } else {
-      console.log("-----------------------------------------");
-      console.log("[SIMULATED EMAIL DISPATCH]");
-      console.log("No SMTP_PASS credential configured in .env. Logging email payload is active.");
-      console.log(`To: ${registrationItem.email}, 444edtech@gmail.com`);
-      console.log(`Subject: Confirmed: Z444 Masterclass Direct Entry Invitation - June 7th 11:00 AM IST`);
-      console.log("-----------------------------------------");
-    }
 
-    // Return successfully to client after awaiting any DB & email work securely
+    (async () => {
+      // Background Firestore save
+      if (firestoreDb) {
+        try {
+          const docRef = firestoreDb.collection("registrations").doc(registrationId);
+          await docRef.set({
+            ...registrationItem,
+            createdAt: FieldValue.serverTimestamp()
+          });
+          console.log(`[Background Queue] Saved registration ${registrationId} securely to Cloud Firestore`);
+        } catch (firestoreError: any) {
+          if (firestoreError?.message?.includes("PERMISSION_DENIED")) {
+            console.log("[Background Queue] Firestore sync inactive / pending credentials - using local registry backup");
+          } else {
+            console.log("[Background Queue] Firestore sync notification:", firestoreError?.message || firestoreError);
+          }
+        }
+      }
+
+      // Background Email dispatch
+      if (smtpPass) {
+        try {
+          const transporter = nodemailer.createTransport({
+            host: smtpHost,
+            port: smtpPort,
+            secure: smtpPort === 465, // true for 465, false for other ports e.g. 587
+            auth: {
+              user: smtpUser,
+              pass: smtpPass
+            }
+          });
+
+          const icalContent = generateIcalEvent(registrationItem.name, registrationItem.email, registrationItem.id);
+          
+          // Send to Student
+          await transporter.sendMail({
+            from: smtpFrom,
+            to: registrationItem.email,
+            subject: `Confirmed: Z444 Masterclass Direct Entry Invitation - June 7th 11:00 AM IST`,
+            html: emailHtml,
+            icalEvent: {
+              filename: "invite.ics",
+              method: "REQUEST",
+              content: icalContent
+            },
+            alternatives: [
+              {
+                contentType: 'text/calendar; charset="utf-8"; method=REQUEST',
+                content: icalContent
+              }
+            ]
+          });
+
+          // Send to Host (Admin Mail)
+          await transporter.sendMail({
+            from: smtpFrom,
+            to: "444edtech@gmail.com",
+            subject: `New Z444 Masterclass Sign-up: ${registrationItem.name} (${registrationItem.department})`,
+            html: `
+              <h3>New Z444 Masterclass Registration received!</h3>
+              <p>Here are the student registration details:</p>
+              <ul>
+                <li><strong>Name:</strong> ${registrationItem.name}</li>
+                <li><strong>Email:</strong> ${registrationItem.email}</li>
+                <li><strong>Phone:</strong> ${registrationItem.phone}</li>
+                <li><strong>B.Tech Year:</strong> ${registrationItem.btechYear}</li>
+                <li><strong>Department:</strong> ${registrationItem.department}</li>
+                <li><strong>Registrant ID:</strong> ${registrationItem.id}</li>
+                <li><strong>Submitted At:</strong> ${registrationItem.createdAt}</li>
+              </ul>
+              <p>A direct registration invitation and Calendar link has been sent out to the student.</p>
+            `
+          });
+
+          console.log(`[Background Queue] Emails successfully dispatched to student (${registrationItem.email}) and host (444edtech@gmail.com)`);
+        } catch (nodemailerError) {
+          console.error("[Background Queue] Nodemailer SMTP dispatch failed:", nodemailerError);
+        }
+      } else {
+        console.log("-----------------------------------------");
+        console.log("[SIMULATED BACKGROUND EMAIL DISPATCH]");
+        console.log("No SMTP_PASS credential configured in .env. Logging email payload is active.");
+        console.log(`To: ${registrationItem.email}, 444edtech@gmail.com`);
+        console.log(`Subject: Confirmed: Z444 Masterclass Direct Entry Invitation - June 7th 11:00 AM IST`);
+        console.log("-----------------------------------------");
+      }
+    })().catch((bgErr) => {
+      console.error("[Background Queue] Uncaught exception processing registration tasks:", bgErr);
+    });
+
+    // Return successfully and instantly to client
     return res.status(200).json({
       success: true,
       message: "Successfully registered and confirmed!",
       data: registrationItem,
-      emailSent: emailSent,
-      transportMethod: transportDetails,
-      cloudSync: savedToCloud,
+      emailSent: !!smtpPass,
+      transportMethod: smtpPass ? "Nodemailer SMTP (Asynchronous Background)" : "Log Only",
+      cloudSync: !!firestoreDb,
       simulatedEmailContent: smtpPass ? "" : emailHtml
     });
 
