@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { StudentRegistration } from "../types";
+import { StudentRegistration } from "../types.js";
 import { 
   Users, 
   Search, 

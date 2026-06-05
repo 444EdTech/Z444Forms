@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { StudentRegistration, ValidationErrors } from "../types";
+import { StudentRegistration, ValidationErrors } from "../types.js";
 import { 
   User, 
   Mail, 
