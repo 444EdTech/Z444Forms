@@ -136,45 +136,78 @@ function generateIcalEvent(studentName: string, studentEmail: string, eventId: s
 let firestoreDb: Firestore | null = null;
 const envProjectId = process.env.FIREBASE_PROJECT_ID;
 const envDatabaseId = process.env.FIREBASE_DATABASE_ID;
+const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
 
-if (envProjectId && envDatabaseId) {
+let projectId: string | undefined = envProjectId;
+let databaseId: string | undefined = envDatabaseId || "(default)";
+let credentialOption: any = undefined;
+
+// 1. Try working with FIREBASE_SERVICE_ACCOUNT JSON:
+if (serviceAccountJson) {
   try {
-    let appInstance;
-    if (admin.apps.length === 0) {
-      appInstance = admin.initializeApp({
-        projectId: envProjectId,
-      });
-    } else {
-      appInstance = admin.apps[0];
+    const parsedCreds = JSON.parse(serviceAccountJson);
+    credentialOption = admin.credential.cert(parsedCreds);
+    if (!projectId) {
+      projectId = parsedCreds.project_id;
     }
-    firestoreDb = getFirestore(appInstance, envDatabaseId);
-    console.log("Firebase Admin initialized successfully using environment variables");
-  } catch (error) {
-    console.error("Failed to initialize Firebase Admin using environment variables:", error);
+  } catch (jsonErr) {
+    console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT env variable:", jsonErr);
   }
-} else {
+}
+
+// 2. Try working with separate Service Account variables:
+if (!credentialOption && clientEmail && privateKey) {
+  if (!projectId && clientEmail.includes("@")) {
+    projectId = clientEmail.split("@")[1]?.split(".")[0];
+  }
+  credentialOption = admin.credential.cert({
+    projectId: projectId,
+    clientEmail: clientEmail,
+    privateKey: privateKey.replace(/\\n/g, "\n"),
+  });
+}
+
+// 3. Fallback to parsing firebase-applet-config.json if no credentials set via env
+if (!projectId) {
   const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
   if (fs.existsSync(firebaseConfigPath)) {
     try {
       const rawConfig = fs.readFileSync(firebaseConfigPath, "utf-8");
       const firebaseConfig = JSON.parse(rawConfig);
-      let appInstance;
-      if (admin.apps.length === 0) {
-        appInstance = admin.initializeApp({
-          projectId: firebaseConfig.projectId,
-        });
-      } else {
-        appInstance = admin.apps[0];
-      }
-      // Specifying custom database ID for Applet Firestore isolation using official getFirestore ESM function
-      firestoreDb = getFirestore(appInstance, firebaseConfig.firestoreDatabaseId);
-      console.log("Firebase Admin initialized successfully from firebase-applet-config.json");
+      projectId = firebaseConfig.projectId;
+      databaseId = firebaseConfig.firestoreDatabaseId || "(default)";
     } catch (error) {
       console.error("Failed to initialize Firebase Admin from firebase-applet-config.json:", error);
     }
-  } else {
-    console.log("Firebase config not found (no env variables or firebase-applet-config.json). Backend will operate using local JSON backup.");
   }
+}
+
+// Ensure we have a projectId to initialize
+if (projectId) {
+  try {
+    let appInstance;
+    if (admin.apps.length === 0) {
+      appInstance = admin.initializeApp({
+        projectId: projectId,
+        ...(credentialOption ? { credential: credentialOption } : {})
+      });
+    } else {
+      appInstance = admin.apps[0];
+    }
+    
+    if (databaseId && databaseId !== "(default)") {
+      firestoreDb = getFirestore(appInstance, databaseId);
+    } else {
+      firestoreDb = getFirestore(appInstance);
+    }
+    console.log(`Firebase Admin initialized successfully (Project: ${projectId}, Database: ${databaseId})`);
+  } catch (error) {
+    console.error("Failed to initialize Firebase Admin:", error);
+  }
+} else {
+  console.log("Firebase config not found (no env variables or firebase-applet-config.json found). Backend will operate using local JSON backup.");
 }
 
 // Initialize Gemini SDK with lazy validation
