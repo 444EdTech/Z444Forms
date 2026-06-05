@@ -3,7 +3,6 @@ import path from "path";
 import fs from "fs";
 import nodemailer from "nodemailer";
 import { GoogleGenAI } from "@google/genai";
-import { createServer as createViteServer } from "vite";
 import admin from "firebase-admin";
 import { getFirestore, Firestore, FieldValue } from "firebase-admin/firestore";
 
@@ -16,31 +15,57 @@ const PORT = 3000;
 app.use(express.json());
 
 // Local File-Based database fallback directory
-const DATA_DIR = path.join(process.cwd(), "data");
+const DATA_DIR = process.env.VERCEL ? "/tmp" : path.join(process.cwd(), "data");
 if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  } catch (err) {
+    console.error("Failed to create DATA_DIR:", err);
+  }
 }
 const REGISTRATIONS_FILE = path.join(DATA_DIR, "registrations.json");
 
+// Multi-layered in-memory fallback for serverless container lifespans
+const inMemoryRegistrations: any[] = [];
+
 // Helper to load registrations locally
 function loadLocalRegistrations(): any[] {
+  let list: any[] = [];
   if (fs.existsSync(REGISTRATIONS_FILE)) {
     try {
       const data = fs.readFileSync(REGISTRATIONS_FILE, "utf-8");
-      return JSON.parse(data);
+      list = JSON.parse(data);
     } catch (e) {
       console.error("Error reading local registrations:", e);
-      return [];
     }
   }
-  return [];
+
+  // Merge with process-level in-memory cache to maintain durability during warm container lifespan
+  const merged = [...list];
+  for (const item of inMemoryRegistrations) {
+    if (!merged.some(m => m.id === item.id)) {
+      merged.push(item);
+    }
+  }
+  return merged;
 }
 
 // Helper to save registrations locally
 function saveLocalRegistration(registration: any) {
-  const all = loadLocalRegistrations();
-  all.push(registration);
-  fs.writeFileSync(REGISTRATIONS_FILE, JSON.stringify(all, null, 2), "utf-8");
+  // Always register in container-level in-memory cache
+  if (!inMemoryRegistrations.some(m => m.id === registration.id)) {
+    inMemoryRegistrations.push(registration);
+  }
+
+  try {
+    const all = loadLocalRegistrations();
+    if (!all.some(m => m.id === registration.id)) {
+      all.push(registration);
+    }
+    fs.writeFileSync(REGISTRATIONS_FILE, JSON.stringify(all, null, 2), "utf-8");
+  } catch (err) {
+    console.error("Failed to write check-in record to backup file:", err);
+  }
 }
 
 // Helper to generate a valid iCalendar (RFC 5545) event invite
@@ -204,190 +229,185 @@ app.post("/api/register", async (req, res) => {
     // 1. Save Locally (Durable backup fallback)
     saveLocalRegistration(registrationItem);
 
-    // Return early to the client immediately so they see the success page instantly!
-    res.status(200).json({
+    // 2. Save to Firestore if available
+    let savedToCloud = false;
+    if (firestoreDb) {
+      try {
+        const docRef = firestoreDb.collection("registrations").doc(registrationId);
+        await docRef.set({
+          ...registrationItem,
+          createdAt: FieldValue.serverTimestamp()
+        });
+        savedToCloud = true;
+        console.log(`Saved registration ${registrationId} securely to Cloud Firestore`);
+      } catch (firestoreError: any) {
+        if (firestoreError?.message?.includes("PERMISSION_DENIED")) {
+          console.log("Firestore sync inactive / pending credentials - registration locally backed up successfully");
+        } else {
+          console.log("Firestore sync notification:", firestoreError?.message || firestoreError);
+        }
+      }
+    }
+    
+    // 3. Prepare Confirming Email directly using data provided (deterministic & extremely fast)
+    let emailSubject = "Confirmed: Z444 Masterclass Admission & Direct Entry Link - June 7th 11:00 AM IST";
+    
+    let emailHtml = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);">
+        <!-- Header block with elegant dark styling matching registration theme -->
+        <div style="background-color: #0f172a; padding: 32px 24px; text-align: center; color: #ffffff;">
+          <div style="display: inline-block; background-color: #3b82f6; color: #ffffff; padding: 6px 12px; font-size: 11px; font-weight: 800; border-radius: 9999px; text-transform: uppercase; tracking-wider: 0.1em; margin-bottom: 12px;">ADMISSION CONFIRMED</div>
+          <h1 style="margin: 0; font-size: 24px; font-weight: 800; color: #f8fafc; tracking-tight: -0.025em;">Z444 Live Masterclass invite</h1>
+          <p style="margin: 6px 0 0 0; color: #94a3b8; font-size: 13.5px;">Custom path: College Theory to authentic engineering standards</p>
+        </div>
+        
+        <div style="padding: 28px; background-color: #ffffff;">
+          <p style="font-size: 16px; font-weight: 700; margin-top: 0; color: #0f172a;">Dear ${registrationItem.name},</p>
+          <p style="margin-top: 4px; font-size: 14.5px; color: #334155;">Fantastic news! Your reservation is official, and your virtual admission seat for the upcoming <strong>Z444 Masterclass</strong> is securely locked in.</p>
+          
+          <!-- Student particulars database readout badge block -->
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin: 20px 0;">
+            <h3 style="margin: 0 0 10px 0; font-size: 11.5px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Your Registration Record:</h3>
+            <table style="width: 100%; font-size: 13.5px; border-collapse: collapse;">
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 8px 0; color: #64748b; font-weight: 500; width: 35%;">Department:</td>
+                <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${registrationItem.department}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 8px 0; color: #64748b; font-weight: 500;">B.Tech Study Year:</td>
+                <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">Year ${registrationItem.btechYear}</td>
+              </tr>
+            </table>
+          </div>
+
+          <!-- Join masterclass primary notice card -->
+          <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 18px; margin: 24px 0; border-radius: 8px;">
+            <p style="margin: 0 0 10px 0; font-weight: 800; color: #1e40af; font-size: 13px; text-transform: uppercase; tracking-wider: 0.05em;">⚡ Access Details:</p>
+            <p style="margin: 0; font-size: 14px; line-height: 1.7; color: #1e293b;">
+              🗓️ <strong>Date:</strong> Sunday, June 7th, 2026<br>
+              ⏰ <strong>Time:</strong> 11:00 AM Indian Standard Time (IST) Sharp<br>
+              📍 <strong>Live Venue:</strong> Google Meet Virtual Room<br>
+              🔗 <strong>Direct URL Link:</strong> <a href="https://meet.google.com/bwi-xehm-peg" style="color: #2563eb; font-weight: bold; text-decoration: underline;">https://meet.google.com/bwi-xehm-peg</a>
+            </p>
+          </div>
+
+          <!-- Add to Calendar Action Button -->
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="https://calendar.google.com/calendar/render?action=TEMPLATE&text=Z444+Masterclass:+Bridging+the+Gap+between+College+%26+Industry&dates=20260607T053000Z/20260607T073000Z&details=Masterclass+to+bridge+the+gap+between+college+learnings+and+true+industry+expectations.+Google+Meet+Link:+https://meet.google.com/bwi-xehm-peg&location=https://meet.google.com/bwi-xehm-peg" 
+               style="background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; font-weight: bold; font-size: 14px; border-radius: 8px; display: inline-block; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);">
+               📥 Add to Google Calendar Schedule
+            </a>
+          </div>
+          
+          <p style="font-size: 14px; font-weight: 700; color: #0f172a; margin-top: 24px;">🎯 Key Takeaways We Will Cover Live:</p>
+          <ul style="padding-left: 20px; font-size: 13.5px; color: #475569; line-height: 1.7; margin-top: 8px;">
+            <li style="margin-bottom: 6px;">How to structure high-converting **technical resumes** to clear screening algorithms.</li>
+            <li style="margin-bottom: 6px;">Mapping authentic engineering roles, tech stacks, and modern internship pipelines.</li>
+            <li style="margin-bottom: 6px;">Direct Outreach cold email structures & LinkedIn mapping hacks that secure responses.</li>
+            <li style="margin-bottom: 6px;">Overcoming the transition gap from college theory to production-ready industry standards.</li>
+          </ul>
+          
+          <p style="font-weight: 700; color: #0f172a; margin-top: 24px; font-size: 14px;">📝 Guidelines for the Live Class:</p>
+          <p style="margin-top: 4px; color: #475569; font-size: 13.5px; line-height: 1.6;">Please join the meet link 5 minutes early to avoid placement buffering. Bring a draft of your resume, a writing notebook, and your absolute focus!</p>
+          
+          <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 28px 0;">
+          <p style="font-size: 12px; color: #64748b; margin-bottom: 0; text-align: center; line-height: 1.6;">
+            Warm regards,<br>
+            <strong style="color: #0f172a;">Z444 Masterclass Team</strong><br>
+            Need help? Drop an email to <a href="mailto:444edtech@gmail.com" style="color: #4f46e5; text-decoration: underline;">444edtech@gmail.com</a>
+          </p>
+        </div>
+      </div>
+    `;
+ 
+    // 4. Send email to student and host (444edtech@gmail.com)
+    let emailSent = false;
+    let transportDetails = "Log Only";
+ 
+    const smtpUser = process.env.SMTP_USER || "444edtech@gmail.com";
+    const smtpPass = process.env.SMTP_PASS;
+    const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
+    const smtpPort = parseInt(process.env.SMTP_PORT || "587");
+    const smtpFrom = process.env.SMTP_FROM || `Z444 Masterclass <${smtpUser}>`;
+ 
+    if (smtpPass) {
+      try {
+        const transporter = nodemailer.createTransport({
+          host: smtpHost,
+          port: smtpPort,
+          secure: smtpPort === 465, // true for 465, false for other ports e.g. 587
+          auth: {
+            user: smtpUser,
+            pass: smtpPass
+          }
+        });
+ 
+        // Send to Student
+        const icalContent = generateIcalEvent(registrationItem.name, registrationItem.email, registrationItem.id);
+        await transporter.sendMail({
+          from: smtpFrom,
+          to: registrationItem.email,
+          subject: `Confirmed: Z444 Masterclass Direct Entry Invitation - June 7th 11:00 AM IST`,
+          html: emailHtml,
+          icalEvent: {
+            filename: "invite.ics",
+            method: "REQUEST",
+            content: icalContent
+          },
+          alternatives: [
+            {
+              contentType: 'text/calendar; charset="utf-8"; method=REQUEST',
+              content: icalContent
+            }
+          ]
+        });
+ 
+        // Send to Host (Admin Mail)
+        await transporter.sendMail({
+          from: smtpFrom,
+          to: "444edtech@gmail.com",
+          subject: `New Z444 Masterclass Sign-up: ${registrationItem.name} (${registrationItem.department})`,
+          html: `
+            <h3>New Z444 Masterclass Registration received!</h3>
+            <p>Here are the student registration details:</p>
+            <ul>
+              <li><strong>Name:</strong> ${registrationItem.name}</li>
+              <li><strong>Email:</strong> ${registrationItem.email}</li>
+              <li><strong>Phone:</strong> ${registrationItem.phone}</li>
+              <li><strong>B.Tech Year:</strong> ${registrationItem.btechYear}</li>
+              <li><strong>Department:</strong> ${registrationItem.department}</li>
+              <li><strong>Registrant ID:</strong> ${registrationItem.id}</li>
+              <li><strong>Submitted At:</strong> ${registrationItem.createdAt}</li>
+            </ul>
+            <p>A direct registration invitation and Calendar link has been sent out to the student.</p>
+          `
+        });
+ 
+        emailSent = true;
+        transportDetails = "Nodemailer SMTP";
+        console.log(`Emails dispatched successfully to student (${registrationItem.email}) and host (444edtech@gmail.com)`);
+      } catch (nodemailerError) {
+        console.error("Nodemailer SMTP dispatch failed:", nodemailerError);
+        transportDetails = "Nodemailer Failed (SMTP Error)";
+      }
+    } else {
+      console.log("-----------------------------------------");
+      console.log("[SIMULATED EMAIL DISPATCH]");
+      console.log("No SMTP_PASS credential configured in .env. Logging email payload is active.");
+      console.log(`To: ${registrationItem.email}, 444edtech@gmail.com`);
+      console.log(`Subject: Confirmed: Z444 Masterclass Direct Entry Invitation - June 7th 11:00 AM IST`);
+      console.log("-----------------------------------------");
+    }
+
+    // Return successfully to client after awaiting any DB & email work securely
+    return res.status(200).json({
       success: true,
       message: "Successfully registered and confirmed!",
       data: registrationItem,
-      emailSent: true,
-      transportMethod: "Background SMTP Queue",
-      cloudSync: true,
-      simulatedEmailContent: "" // Background processed, student redirect to success desk instantly
-    });
-
-    // Run storing to Firestore, AI custom drafting, and calendar invitation email delivery in the background!
-    (async () => {
-      // 2. Save to Firestore if available
-      let savedToCloud = false;
-      if (firestoreDb) {
-        try {
-          const docRef = firestoreDb.collection("registrations").doc(registrationId);
-          await docRef.set({
-            ...registrationItem,
-            createdAt: FieldValue.serverTimestamp()
-          });
-          savedToCloud = true;
-          console.log(`[BACKGROUND] Saved registration ${registrationId} securely to Cloud Firestore`);
-        } catch (firestoreError: any) {
-          if (firestoreError?.message?.includes("PERMISSION_DENIED")) {
-            console.log("[BACKGROUND] Firestore sync inactive / pending credentials - registration locally backed up successfully");
-          } else {
-            console.log("[BACKGROUND] Firestore sync notification:", firestoreError?.message || firestoreError);
-          }
-        }
-      }
-      
-      // 3. Prepare Confirming Email directly using data provided (deterministic & extremely fast)
-      let emailSubject = "Confirmed: Z444 Masterclass Admission & Direct Entry Link - June 7th 11:00 AM IST";
-      
-      let emailHtml = `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);">
-          <!-- Header block with elegant dark styling matching registration theme -->
-          <div style="background-color: #0f172a; padding: 32px 24px; text-align: center; color: #ffffff;">
-            <div style="display: inline-block; background-color: #3b82f6; color: #ffffff; padding: 6px 12px; font-size: 11px; font-weight: 800; border-radius: 9999px; text-transform: uppercase; tracking-wider: 0.1em; margin-bottom: 12px;">ADMISSION CONFIRMED</div>
-            <h1 style="margin: 0; font-size: 24px; font-weight: 800; color: #f8fafc; tracking-tight: -0.025em;">Z444 Live Masterclass invite</h1>
-            <p style="margin: 6px 0 0 0; color: #94a3b8; font-size: 13.5px;">Custom path: College Theory to authentic engineering standards</p>
-          </div>
-          
-          <div style="padding: 28px; background-color: #ffffff;">
-            <p style="font-size: 16px; font-weight: 700; margin-top: 0; color: #0f172a;">Dear ${registrationItem.name},</p>
-            <p style="margin-top: 4px; font-size: 14.5px; color: #334155;">Fantastic news! Your reservation is official, and your virtual admission seat for the upcoming <strong>Z444 Masterclass</strong> is securely locked in.</p>
-            
-            <!-- Student particulars database readout badge block -->
-            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin: 20px 0;">
-              <h3 style="margin: 0 0 10px 0; font-size: 11.5px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Your Registration Record:</h3>
-              <table style="width: 100%; font-size: 13.5px; border-collapse: collapse;">
-                <tr style="border-bottom: 1px solid #f1f5f9;">
-                  <td style="padding: 8px 0; color: #64748b; font-weight: 500; width: 35%;">Department:</td>
-                  <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${registrationItem.department}</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #f1f5f9;">
-                  <td style="padding: 8px 0; color: #64748b; font-weight: 500;">B.Tech Study Year:</td>
-                  <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">Year ${registrationItem.btechYear}</td>
-                </tr>
-              </table>
-            </div>
-
-            <!-- Join masterclass primary notice card -->
-            <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 18px; margin: 24px 0; border-radius: 8px;">
-              <p style="margin: 0 0 10px 0; font-weight: 800; color: #1e40af; font-size: 13px; text-transform: uppercase; tracking-wider: 0.05em;">⚡ Access Details:</p>
-              <p style="margin: 0; font-size: 14px; line-height: 1.7; color: #1e293b;">
-                🗓️ <strong>Date:</strong> Sunday, June 7th, 2026<br>
-                ⏰ <strong>Time:</strong> 11:00 AM Indian Standard Time (IST) Sharp<br>
-                📍 <strong>Live Venue:</strong> Google Meet Virtual Room<br>
-                🔗 <strong>Direct URL Link:</strong> <a href="https://meet.google.com/bwi-xehm-peg" style="color: #2563eb; font-weight: bold; text-decoration: underline;">https://meet.google.com/bwi-xehm-peg</a>
-              </p>
-            </div>
-
-            <!-- Add to Calendar Action Button -->
-            <div style="text-align: center; margin: 24px 0;">
-              <a href="https://calendar.google.com/calendar/render?action=TEMPLATE&text=Z444+Masterclass:+Bridging+the+Gap+between+College+%26+Industry&dates=20260607T053000Z/20260607T073000Z&details=Masterclass+to+bridge+the+gap+between+college+learnings+and+true+industry+expectations.+Google+Meet+Link:+https://meet.google.com/bwi-xehm-peg&location=https://meet.google.com/bwi-xehm-peg" 
-                 style="background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; font-weight: bold; font-size: 14px; border-radius: 8px; display: inline-block; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);">
-                 📥 Add to Google Calendar Schedule
-              </a>
-            </div>
-            
-            <p style="font-size: 14px; font-weight: 700; color: #0f172a; margin-top: 24px;">🎯 Key Takeaways We Will Cover Live:</p>
-            <ul style="padding-left: 20px; font-size: 13.5px; color: #475569; line-height: 1.7; margin-top: 8px;">
-              <li style="margin-bottom: 6px;">How to structure high-converting **technical resumes** to clear screening algorithms.</li>
-              <li style="margin-bottom: 6px;">Mapping authentic engineering roles, tech stacks, and modern internship pipelines.</li>
-              <li style="margin-bottom: 6px;">Direct Outreach cold email structures & LinkedIn mapping hacks that secure responses.</li>
-              <li style="margin-bottom: 6px;">Overcoming the transition gap from college theory to production-ready industry standards.</li>
-            </ul>
-            
-            <p style="font-weight: 700; color: #0f172a; margin-top: 24px; font-size: 14px;">📝 Guidelines for the Live Class:</p>
-            <p style="margin-top: 4px; color: #475569; font-size: 13.5px; line-height: 1.6;">Please join the meet link 5 minutes early to avoid placement buffering. Bring a draft of your resume, a writing notebook, and your absolute focus!</p>
-            
-            <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 28px 0;">
-            <p style="font-size: 12px; color: #64748b; margin-bottom: 0; text-align: center; line-height: 1.6;">
-              Warm regards,<br>
-              <strong style="color: #0f172a;">Z444 Masterclass Team</strong><br>
-              Need help? Drop an email to <a href="mailto:444edtech@gmail.com" style="color: #4f46e5; text-decoration: underline;">444edtech@gmail.com</a>
-            </p>
-          </div>
-        </div>
-      `;
-   
-      // 4. Send email to student and host (444edtech@gmail.com)
-      let emailSent = false;
-      let transportDetails = "Log Only";
-   
-      const smtpUser = process.env.SMTP_USER || "444edtech@gmail.com";
-      const smtpPass = process.env.SMTP_PASS;
-      const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
-      const smtpPort = parseInt(process.env.SMTP_PORT || "587");
-      const smtpFrom = process.env.SMTP_FROM || `Z444 Masterclass <${smtpUser}>`;
-   
-      if (smtpPass) {
-        try {
-          const transporter = nodemailer.createTransport({
-            host: smtpHost,
-            port: smtpPort,
-            secure: smtpPort === 465, // true for 465, false for other ports e.g. 587
-            auth: {
-              user: smtpUser,
-              pass: smtpPass
-            }
-          });
-   
-          // Send to Student
-          const icalContent = generateIcalEvent(registrationItem.name, registrationItem.email, registrationItem.id);
-          await transporter.sendMail({
-            from: smtpFrom,
-            to: registrationItem.email,
-            subject: `Confirmed: Z444 Masterclass Direct Entry Invitation - June 7th 11:00 AM IST`,
-            html: emailHtml,
-            icalEvent: {
-              filename: "invite.ics",
-              method: "REQUEST",
-              content: icalContent
-            },
-            alternatives: [
-              {
-                contentType: 'text/calendar; charset="utf-8"; method=REQUEST',
-                content: icalContent
-              }
-            ]
-          });
-   
-          // Send to Host (Admin Mail)
-          await transporter.sendMail({
-            from: smtpFrom,
-            to: "444edtech@gmail.com",
-            subject: `New Z444 Masterclass Sign-up: ${registrationItem.name} (${registrationItem.department})`,
-            html: `
-              <h3>New Z444 Masterclass Registration received!</h3>
-              <p>Here are the student registration details:</p>
-              <ul>
-                <li><strong>Name:</strong> ${registrationItem.name}</li>
-                <li><strong>Email:</strong> ${registrationItem.email}</li>
-                <li><strong>Phone:</strong> ${registrationItem.phone}</li>
-                <li><strong>B.Tech Year:</strong> ${registrationItem.btechYear}</li>
-                <li><strong>Department:</strong> ${registrationItem.department}</li>
-                <li><strong>Registrant ID:</strong> ${registrationItem.id}</li>
-                <li><strong>Submitted At:</strong> ${registrationItem.createdAt}</li>
-              </ul>
-              <p>A direct registration invitation and Calendar link has been sent out to the student.</p>
-            `
-          });
-   
-          emailSent = true;
-          transportDetails = "Nodemailer SMTP";
-          console.log(`[BACKGROUND] Emails dispatched successfully to student (${registrationItem.email}) and host (444edtech@gmail.com)`);
-        } catch (nodemailerError) {
-          console.error("Nodemailer SMTP dispatch failed:", nodemailerError);
-          transportDetails = "Nodemailer Failed (SMTP Error)";
-        }
-      } else {
-        console.log("-----------------------------------------");
-        console.log("[SIMULATED EMAIL DISPATCH]");
-        console.log("No SMTP_PASS credential configured in .env. Logging email payload is active.");
-        console.log(`To: ${registrationItem.email}, 444edtech@gmail.com`);
-        console.log(`Subject: Confirmed: Z444 Masterclass Direct Entry Invitation - June 7th 11:00 AM IST`);
-        console.log("-----------------------------------------");
-      }
-    })().catch((bgErr) => {
-      console.error("[BACKGROUNDTASK] Error in registration background tasks:", bgErr);
+      emailSent: emailSent,
+      transportMethod: transportDetails,
+      cloudSync: savedToCloud,
+      simulatedEmailContent: smtpPass ? "" : emailHtml
     });
 
   } catch (err: any) {
@@ -743,16 +763,18 @@ app.get("/api/cron-reminders", async (req, res) => {
 
 if (!process.env.VERCEL) {
   if (process.env.NODE_ENV !== "production") {
-    createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    }).then((vite) => {
-      app.use(vite.middlewares);
-      app.listen(PORT, "0.0.0.0", () => {
-        console.log(`[Vite Dev Mode] Server listening on http://localhost:${PORT}`);
+    import("vite").then(({ createServer: createViteServer }) => {
+      createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      }).then((vite) => {
+        app.use(vite.middlewares);
+        app.listen(PORT, "0.0.0.0", () => {
+          console.log(`[Vite Dev Mode] Server listening on http://localhost:${PORT}`);
+        });
+      }).catch((err) => {
+        console.error("Vite server initialization failed:", err);
       });
-    }).catch((err) => {
-      console.error("Vite server initialization failed:", err);
     });
   } else {
     const distPath = path.join(process.cwd(), "dist");
