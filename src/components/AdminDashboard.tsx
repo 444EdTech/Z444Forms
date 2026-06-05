@@ -49,7 +49,7 @@ export default function AdminDashboard() {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/local-registrations");
+      const res = await fetch("/api/registrations");
       const json = await res.json();
       if (res.ok && json.success) {
         const sorted = (json.registrations || []).sort(
