@@ -27,13 +27,23 @@ import {
   Share2,
   Copy,
   Check,
-  CalendarPlus
+  CalendarPlus,
+  Sun,
+  Moon
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 export default function App() {
   const [currentPath, setCurrentPath] = useState(() => {
     return window.location.pathname;
+  });
+
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const savedTheme = localStorage.getItem("theme");
+    if (savedTheme) {
+      return savedTheme === "dark";
+    }
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
   
   const activeTab = (currentPath === "/z444space" || currentPath.endsWith("/z444space")) ? "admin" : "register";
@@ -51,6 +61,16 @@ export default function App() {
       window.removeEventListener("popstate", handlePopState);
     };
   }, []);
+
+  React.useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
+  }, [isDarkMode]);
 
   const navigateTo = (path: string) => {
     window.history.pushState({}, "", path);
@@ -71,7 +91,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-indigo-500 selection:text-white flex flex-col">
+    <div className={`min-h-screen transition-colors duration-300 bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 font-sans selection:bg-indigo-500 selection:text-white flex flex-col ${isDarkMode ? "dark" : ""}`}>
       
       {/* Decorative top header accent line */}
       <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
@@ -80,41 +100,80 @@ export default function App() {
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 md:py-10">
         
         {/* Masthead Header bar */}
-        <header className="mb-8 md:mb-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-200/60 pb-6">
+        <header className="mb-8 md:mb-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-200/60 dark:border-slate-800 pb-6 transition-colors duration-300">
           <div className="flex gap-3.5 items-center">
             {/* Elegant logo mark */}
-            <Z444Logo variant="black-bg" size={56} className="shadow-lg hover:scale-115 active:scale-95 transition-all outline-none shrink-0" />
+            <Z444Logo variant="black-bg" size={56} className="shadow-lg hover:scale-110 active:scale-95 transition-all outline-none shrink-0" />
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#ef4444] bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-full">
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#ef4444] bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 px-2.5 py-0.5 rounded-full transition-colors">
                   Z444
                 </span>
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#3b82f6] bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 px-2.5 py-0.5 rounded-full transition-colors">
+                  Masterclass Series
+                </span>
               </div>
-              <h1 className="text-xl font-extrabold tracking-tight text-slate-900 mt-1">Z444 Masterclass</h1>
+              <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white mt-1">Z444 Masterclass</h1>
             </div>
           </div>
 
-          {/* Header Action / Badge based on current path */}
-          {activeTab === "admin" ? (
-            <div className="flex items-center gap-3">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 border border-indigo-100 px-3.5 py-1.5 rounded-xl flex items-center gap-1.5">
-                <Sliders className="w-3.5 h-3.5" />
-                Coordinator Control Room
-              </span>
-              <button
-                onClick={() => navigateTo("/")}
-                className="px-3.5 py-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-colors rounded-xl flex items-center gap-1.5 cursor-pointer"
-              >
-                <GraduationCap className="w-3.5 h-3.5" />
-                Go to Student Portal
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 text-slate-400 text-xs">
-              <ShieldCheck className="w-4 h-4 text-emerald-500" />
-              <span>Registration Form</span>
-            </div>
-          )}
+          {/* Action Area & Theme Selector Toggle */}
+          <div className="flex items-center gap-3.5 self-start md:self-auto">
+            {/* Theme Toggle Button */}
+            <button
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              aria-label="Toggle Theme Mode"
+              className="p-2.5 bg-white hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl transition-all duration-200 border border-slate-200/60 dark:border-slate-800 cursor-pointer flex items-center justify-center shadow-sm relative overflow-hidden"
+            >
+              <AnimatePresence mode="popLayout" initial={false}>
+                {isDarkMode ? (
+                  <motion.div
+                    key="sun"
+                    initial={{ y: 20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: -20, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="flex justify-center items-center"
+                  >
+                    <Sun className="w-4 h-4 text-amber-500 fill-amber-500/20" />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="moon"
+                    initial={{ y: 20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: -20, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="flex justify-center items-center"
+                  >
+                    <Moon className="w-4 h-4 text-indigo-600 fill-indigo-600/15" />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </button>
+
+            {/* Header Action / Badge based on current path */}
+            {activeTab === "admin" ? (
+              <div className="flex items-center gap-3.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 px-3.5 py-1.5 rounded-xl flex items-center gap-1.5">
+                  <Sliders className="w-3.5 h-3.5" />
+                  Control Room
+                </span>
+                <button
+                  onClick={() => navigateTo("/")}
+                  className="px-3.5 py-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 transition-colors rounded-xl flex items-center gap-1.5 cursor-pointer border border-transparent dark:border-slate-800"
+                >
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  Student Portal
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500 text-xs font-semibold">
+                <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                <span>Secure Portal</span>
+              </div>
+            )}
+          </div>
         </header>
 
         {/* Tab contents */}
@@ -131,59 +190,48 @@ export default function App() {
               >
                  {!registrationSuccess ? (
                   <RegistrationForm onSuccess={handleRegistrationSuccess} />
-                ) : (
+                 ) : (
                   /* Success portal layout matching the beautiful spec design */
-                  <div id="receipt-screen" className="max-w-2xl mx-auto space-y-8 animate-fade-in">
-                    <div className="bg-gradient-to-b from-emerald-50 to-emerald-50/20 border border-emerald-100 p-8 rounded-3xl text-center shadow-lg shadow-emerald-50/30 relative overflow-hidden">
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-100/30 rounded-full blur-2xl pointer-events-none" />
+                  <div id="receipt-screen" className="max-w-2xl mx-auto space-y-8 animate-fade-in text-slate-800 dark:text-slate-100">
+                    <div className="bg-gradient-to-b from-emerald-50 to-emerald-50/20 dark:from-emerald-950/20 dark:to-emerald-950/5 border border-emerald-100 dark:border-emerald-900/60 p-8 rounded-3xl text-center shadow-lg shadow-emerald-50/30 dark:shadow-none relative overflow-hidden transition-colors duration-300">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-100/30 dark:bg-emerald-800/10 rounded-full blur-2xl pointer-events-none" />
                       <div className="w-16 h-16 bg-emerald-500 text-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-emerald-500/20">
                         <CheckCircle className="w-8 h-8" />
                       </div>
                       
-                      <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Seat Registration Successful!</h2>
-                      <p className="text-slate-600 text-sm max-w-md mx-auto mt-2 leading-relaxed">
+                      <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Seat Registration Successful!</h2>
+                      <p className="text-slate-600 dark:text-slate-300 text-sm max-w-md mx-auto mt-2 leading-relaxed">
                         Congratulations, <strong>{registrationSuccess.registration.name}</strong>! Your seat is secured. A direct Google Meet invite has been dispatched to your email (<strong>{registrationSuccess.registration.email}</strong>).
                       </p>
-
-                      {/*<div className="mt-5 flex flex-wrap justify-center gap-4 text-xs font-semibold">
-                        <span className="px-3.5 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg flex items-center gap-1.5 shadow-sm">
-                          <Database className="w-3.5 h-3.5 text-emerald-500" />
-                          {registrationSuccess.cloudSync ? "Synced with Firestore" : "Saved to Secure Backup"}
-                        </span>
-                        <span className="px-3.5 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg flex items-center gap-1.5 shadow-sm">
-                          <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-                          {registrationSuccess.emailSent ? "Confirmation email dispatched" : "SMTP Active; Email simulation logged"}
-                        </span>
-                      </div>*/}
                     </div>
 
                     {/* Masterclass session details & quick actions card */}
-                    <div className="bg-white rounded-3xl border border-slate-100 shadow-xl shadow-slate-150/45 p-6 md:p-8 space-y-6">
-                      <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                        <Calendar className="w-5 h-5 text-indigo-600" />
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-850 shadow-xl shadow-slate-150/45 dark:shadow-none p-6 md:p-8 space-y-6 transition-colors duration-300">
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <Calendar className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                         Session Joiner Checklist
                       </h3>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-start gap-3">
-                          <Clock className="w-5 h-5 text-indigo-600 mt-1 shrink-0" />
+                        <div className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-850 rounded-2xl flex items-start gap-3">
+                          <Clock className="w-5 h-5 text-indigo-600 dark:text-indigo-400 mt-1 shrink-0" />
                           <div>
-                            <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Date & Time</p>
-                            <p className="text-sm font-bold text-slate-950 mt-1">June 7th, 2026 (Sunday)</p>
-                            <p className="text-xs text-slate-500 font-medium">11:00 AM IST (Sharp)</p>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-extrabold uppercase tracking-wider">Date & Time</p>
+                            <p className="text-sm font-bold text-slate-950 dark:text-white mt-1">June 7th, 2026 (Sunday)</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">11:00 AM IST (Sharp)</p>
                           </div>
                         </div>
 
-                        <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-start gap-3">
-                          <MapPin className="w-5 h-5 text-indigo-600 mt-1 shrink-0" />
+                        <div className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-850 rounded-2xl flex items-start gap-3">
+                          <MapPin className="w-5 h-5 text-indigo-600 dark:text-indigo-400 mt-1 shrink-0" />
                           <div>
-                            <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Live Platform</p>
-                            <p className="text-sm font-bold text-slate-950 mt-1">Google Meet</p>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-extrabold uppercase tracking-wider">Live Platform</p>
+                            <p className="text-sm font-bold text-slate-950 dark:text-white mt-1">Google Meet</p>
                             <a 
                               href="https://meet.google.com/bwi-xehm-peg" 
                               target="_blank" 
                               rel="noreferrer"
-                              className="text-xs text-indigo-600 font-bold hover:underline inline-flex items-center gap-1 mt-0.5"
+                              className="text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline inline-flex items-center gap-1 mt-0.5"
                             >
                               meet.google.com/bwi-xehm-peg
                               <ExternalLink className="w-3 h-3" />
@@ -208,7 +256,7 @@ export default function App() {
                           href="https://meet.google.com/bwi-xehm-peg"
                           target="_blank"
                           rel="noreferrer"
-                          className="flex items-center justify-center gap-2 py-3.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl cursor-pointer transition-colors shadow-md text-center"
+                          className="flex items-center justify-center gap-2 py-3.5 px-4 bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold text-xs rounded-xl cursor-pointer transition-colors shadow-md text-center"
                         >
                           <ExternalLink className="w-4 h-4" />
                           Join Live Google Meet
@@ -217,7 +265,7 @@ export default function App() {
                     </div>
 
                     {/* Share with Friends section */}
-                    <div className="bg-slate-900 text-white rounded-3xl p-6 md:p-8 space-y-5 shadow-xl relative overflow-hidden">
+                    <div className="bg-slate-900 text-white rounded-3xl p-6 md:p-8 space-y-5 shadow-xl relative overflow-hidden border border-slate-800">
                       {/* background ambient blur */}
                       <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/15 rounded-full blur-2xl pointer-events-none" />
                       
@@ -279,7 +327,7 @@ export default function App() {
                     <div className="flex justify-center pt-2">
                       <button
                         onClick={handleResetForm}
-                        className="px-5 py-3 text-slate-400 hover:text-slate-800 text-xs font-semibold inline-flex items-center gap-2 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+                        className="px-5 py-3 text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 text-xs font-semibold inline-flex items-center gap-2 hover:bg-slate-100 dark:hover:bg-slate-900 rounded-xl transition-all cursor-pointer"
                       >
                         <ArrowLeft className="w-4 h-4" />
                         Back to Registration Desk
@@ -306,12 +354,12 @@ export default function App() {
       </main>
 
       {/* Styled minimal footer */}
-      <footer className="w-full border-t border-slate-200/50 py-6 mt-16 bg-white text-center text-[11px] text-slate-400 font-semibold tracking-wide uppercase">
+      <footer className="w-full border-t border-slate-200/50 dark:border-slate-800 py-6 mt-16 bg-white dark:bg-slate-900 text-center text-[11px] text-slate-400 dark:text-slate-500 font-semibold tracking-wide uppercase transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4">
           <p>© 2026 Z444 masterclass series. Bridging academia is our duty.</p>
           <div className="flex gap-4 items-center font-bold text-indigo-500">
-            <span className="text-[10px] text-slate-400 font-medium">Coordinate inbox:</span>
-            <a href="mailto:444edtech@gmail.com" className="hover:underline">444edtech@gmail.com</a>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Coordinate inbox:</span>
+            <a href="mailto:444edtech@gmail.com" className="hover:underline text-indigo-500 dark:text-indigo-400">444edtech@gmail.com</a>
           </div>
         </div>
       </footer>
