@@ -196,11 +196,8 @@ if (serviceAccountJson) {
     credentialOption = admin.credential.cert(parsedCreds);
     if (parsedCreds.project_id) {
       projectId = parsedCreds.project_id;
-      // If the project from the service account is a custom project (not sandbox),
-      // we must reset the database ID to the custom project's default database:
-      if (projectId !== envProjectId) {
-        databaseId = "(default)";
-      }
+      // Use the explicitly configured database ID if present, otherwise default to "(default)"
+      databaseId = envDatabaseId || "(default)";
     }
   } catch (jsonErr: any) {
     firebaseDiagnostics.serviceAccountParseError = jsonErr?.message || String(jsonErr);
@@ -245,13 +242,18 @@ if (projectId) {
   firebaseDiagnostics.initAttempted = true;
   try {
     let appInstance;
-    if (admin.apps.length === 0) {
+    
+    // Choose a unique app name based on the projectId to avoid reusing a sandbox/different [DEFAULT] app
+    const appName = projectId === envProjectId ? "[DEFAULT]" : `custom_${projectId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+    const existingApp = admin.apps.find(app => app.name === appName);
+    
+    if (existingApp) {
+      appInstance = existingApp;
+    } else {
       appInstance = admin.initializeApp({
         projectId: projectId,
         ...(credentialOption ? { credential: credentialOption } : {})
-      });
-    } else {
-      appInstance = admin.apps[0];
+      }, appName);
     }
     
     if (databaseId && databaseId !== "(default)") {
@@ -262,7 +264,7 @@ if (projectId) {
     firebaseDiagnostics.initialized = true;
     firebaseDiagnostics.initSuccess = true;
     firebaseDiagnostics.actualDbNull = false;
-    console.log(`Firebase Admin initialized successfully (Project: ${projectId}, Database: ${databaseId})`);
+    console.log(`Firebase Admin initialized successfully (Project: ${projectId}, Database: ${databaseId}, AppName: ${appName})`);
   } catch (error: any) {
     firebaseDiagnostics.initError = error?.message || String(error);
     console.error("Failed to initialize Firebase Admin:", error);
