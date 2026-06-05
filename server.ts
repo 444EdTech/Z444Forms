@@ -194,8 +194,13 @@ if (serviceAccountJson) {
     firebaseDiagnostics.isServiceAccountValidJson = true;
     firebaseDiagnostics.detectedCredentialType = "service_account_json";
     credentialOption = admin.credential.cert(parsedCreds);
-    if (!projectId) {
+    if (parsedCreds.project_id) {
       projectId = parsedCreds.project_id;
+      // If the project from the service account is a custom project (not sandbox),
+      // we must reset the database ID to the custom project's default database:
+      if (projectId !== envProjectId) {
+        databaseId = "(default)";
+      }
     }
   } catch (jsonErr: any) {
     firebaseDiagnostics.serviceAccountParseError = jsonErr?.message || String(jsonErr);
