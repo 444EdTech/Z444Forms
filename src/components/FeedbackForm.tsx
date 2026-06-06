@@ -16,6 +16,7 @@ export default function FeedbackForm({ onBack }: FeedbackFormProps) {
   const [email, setEmail] = useState("");
   const [rating, setRating] = useState<number>(0);
   const [comments, setComments] = useState("");
+  const [willingToJoinCommunity, setWillingToJoinCommunity] = useState(false);
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [errors, setErrors] = useState<ValidationErrors>({});
@@ -62,6 +63,7 @@ export default function FeedbackForm({ onBack }: FeedbackFormProps) {
           email: email.trim(),
           rating,
           comments: comments.trim(),
+          willingToJoinCommunity,
         }),
       });
 
@@ -137,7 +139,7 @@ export default function FeedbackForm({ onBack }: FeedbackFormProps) {
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Student Name */}
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+            <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-350">
               Full Name
             </label>
             <input
@@ -148,8 +150,8 @@ export default function FeedbackForm({ onBack }: FeedbackFormProps) {
                 if (errors.name) setErrors(prev => ({ ...prev, name: undefined }));
               }}
               placeholder="e.g. John Doe"
-              className={`w-full px-4 py-3 bg-slate-50 border hover:border-slate-300 dark:bg-slate-950 dark:hover:border-slate-800 rounded-2xl text-sm font-medium text-slate-950 dark:text-white outline-none focus:border-indigo-500 dark:focus:border-indigo-500 transition-colors ${
-                errors.name ? "border-rose-300 dark:border-rose-900 focus:border-rose-500" : "border-slate-200 dark:border-slate-850"
+              className={`w-full px-4 py-3 bg-slate-50 border hover:border-slate-300 dark:bg-slate-950 dark:hover:border-slate-800 rounded-2xl text-sm font-semibold text-slate-900 dark:text-white outline-none focus:border-indigo-500 dark:focus:border-indigo-500 transition-colors ${
+                errors.name ? "border-rose-500 dark:border-rose-900 focus:border-rose-500" : "border-slate-200 dark:border-slate-800"
               }`}
             />
             {errors.name && <p className="text-[11px] font-semibold text-rose-500">{errors.name}</p>}
@@ -157,7 +159,7 @@ export default function FeedbackForm({ onBack }: FeedbackFormProps) {
 
           {/* Email Address */}
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+            <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-350">
               Email Address
             </label>
             <input
@@ -168,8 +170,8 @@ export default function FeedbackForm({ onBack }: FeedbackFormProps) {
                 if (errors.email) setErrors(prev => ({ ...prev, email: undefined }));
               }}
               placeholder="e.g. john@university.edu"
-              className={`w-full px-4 py-3 bg-slate-50 border hover:border-slate-300 dark:bg-slate-950 dark:hover:border-slate-800 rounded-2xl text-sm font-medium text-slate-950 dark:text-white outline-none focus:border-indigo-500 dark:focus:border-indigo-500 transition-colors ${
-                errors.email ? "border-rose-300 dark:border-rose-900 focus:border-rose-500" : "border-slate-200 dark:border-slate-850"
+              className={`w-full px-4 py-3 bg-slate-50 border hover:border-slate-300 dark:bg-slate-950 dark:hover:border-slate-800 rounded-2xl text-sm font-semibold text-slate-900 dark:text-white outline-none focus:border-indigo-500 dark:focus:border-indigo-500 transition-colors ${
+                errors.email ? "border-rose-500 dark:border-rose-900 focus:border-rose-500" : "border-slate-200 dark:border-slate-800"
               }`}
             />
             {errors.email && <p className="text-[11px] font-semibold text-rose-500">{errors.email}</p>}
@@ -177,7 +179,7 @@ export default function FeedbackForm({ onBack }: FeedbackFormProps) {
 
           {/* Rating (1 to 5 Stars) */}
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">
+            <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-350 block">
               Overall Experience Rating
             </label>
             <div className="flex items-center gap-2 py-1.5">
@@ -204,7 +206,7 @@ export default function FeedbackForm({ onBack }: FeedbackFormProps) {
               ))}
               
               {rating > 0 && (
-                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200/60 px-2 rounded-lg ml-2">
+                <span className="text-xs font-bold text-indigo-650 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200/60 px-2 rounded-lg ml-2">
                   {rating === 5 ? "Excellent 🌟" : rating === 4 ? "Very Good 👍" : rating === 3 ? "Good ok" : rating === 2 ? "Below Average" : "Needs Improvement"}
                 </span>
               )}
@@ -214,7 +216,7 @@ export default function FeedbackForm({ onBack }: FeedbackFormProps) {
 
           {/* Detailed Comments */}
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+            <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-350">
               Detailed Comments & Key Learnings
             </label>
             <textarea
@@ -225,14 +227,34 @@ export default function FeedbackForm({ onBack }: FeedbackFormProps) {
                 if (errors.comments) setErrors(prev => ({ ...prev, comments: undefined }));
               }}
               placeholder="What did you learn? What can we do better? Share details..."
-              className={`w-full px-4 py-3 bg-slate-50 border hover:border-slate-300 dark:bg-slate-950 dark:hover:border-slate-800 rounded-2xl text-sm font-medium text-slate-950 dark:text-white outline-none focus:border-indigo-500 dark:focus:border-indigo-500 transition-colors resize-none leading-relaxed ${
-                errors.comments ? "border-rose-300 dark:border-rose-900 focus:border-rose-500" : "border-slate-200 dark:border-slate-850"
+              className={`w-full px-4 py-3 bg-slate-50 border hover:border-slate-300 dark:bg-slate-950 dark:hover:border-slate-800 rounded-2xl text-sm font-semibold text-slate-900 dark:text-white outline-none focus:border-indigo-500 dark:focus:border-indigo-500 transition-colors resize-none leading-relaxed ${
+                errors.comments ? "border-rose-500 dark:border-rose-900 focus:border-rose-500" : "border-slate-200 dark:border-slate-800"
               }`}
             />
-            <div className="flex justify-between text-[10px] text-slate-400 font-medium">
+            <div className="flex justify-between text-[10px] text-slate-500 dark:text-slate-400 font-semibold font-medium">
               <span>{comments.length}/2000 characters limit</span>
               {errors.comments && <span className="text-rose-500 font-semibold">{errors.comments}</span>}
             </div>
+          </div>
+
+          {/* Willing to Join Community Checkbox Option */}
+          <div className="p-4 bg-emerald-500/10 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl transition-all duration-300">
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={willingToJoinCommunity}
+                onChange={(e) => setWillingToJoinCommunity(e.target.checked)}
+                className="w-4 h-4 mt-1 accent-emerald-600 rounded cursor-pointer shrink-0"
+              />
+              <div className="space-y-1">
+                <span className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5 leading-tight">
+                  Willing to Join Z444 WhatsApp Community? 🚀
+                </span>
+                <p className="text-[11px] text-slate-655 dark:text-slate-350 leading-relaxed font-semibold">
+                  Check this box if you want to be added directly to our private Z444 Community group for hiring calls, resume review support, and active tech discussion with peers! (Enrollment rate: INR 244)
+                </p>
+              </div>
+            </label>
           </div>
 
           {/* Submission Button */}

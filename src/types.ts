@@ -19,6 +19,7 @@ export interface StudentFeedback {
   email: string;
   rating: number;
   comments: string;
+  willingToJoinCommunity?: boolean;
   createdAt: string;
 }
 

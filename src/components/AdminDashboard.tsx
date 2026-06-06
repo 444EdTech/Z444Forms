@@ -654,6 +654,7 @@ export default function AdminDashboard() {
                     <th className="p-4 pl-6">Student Info</th>
                     <th className="p-4">Satisfaction Rating</th>
                     <th className="p-4">Detailed Comments</th>
+                    <th className="p-4">Want Community?</th>
                     <th className="p-4 pr-6">Submitted At</th>
                   </tr>
                 </thead>
@@ -681,6 +682,15 @@ export default function AdminDashboard() {
                         <div className="text-slate-800 dark:text-slate-205 text-[11px] leading-relaxed italic break-words bg-slate-50 dark:bg-slate-950 border border-slate-200/50 dark:border-slate-855/65 p-3 rounded-xl font-medium">
                           "{item.comments}"
                         </div>
+                      </td>
+                      <td className="p-4">
+                        {item.willingToJoinCommunity ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-extrabold uppercase bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 rounded-xl">
+                            <CheckCircle className="w-3.5 h-3.5 text-emerald-500" /> Yes, Keen!
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 dark:text-slate-500 text-[10px] uppercase font-bold pl-2">No Choice</span>
+                        )}
                       </td>
                       <td className="p-4 pr-6 text-slate-500 dark:text-slate-400">
                         <div className="flex items-center gap-1.5">

@@ -376,7 +376,7 @@ if (geminiKey && geminiKey !== "MY_GEMINI_API_KEY") {
 // Submit Feedback
 async function handlePostFeedback(req: any, res: any) {
   try {
-    const { name, email, rating, comments } = req.body;
+    const { name, email, rating, comments, willingToJoinCommunity } = req.body;
 
     // Server-side strict validations
     if (!name || typeof name !== "string" || name.trim().length === 0 || name.length > 100) {
@@ -400,6 +400,7 @@ async function handlePostFeedback(req: any, res: any) {
       email: email.trim().toLowerCase(),
       rating: numRating,
       comments: comments.trim(),
+      willingToJoinCommunity: Boolean(willingToJoinCommunity),
       createdAt: new Date().toISOString()
     };
 
