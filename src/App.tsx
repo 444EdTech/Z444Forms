@@ -6,6 +6,8 @@
 import React, { useState } from "react";
 import RegistrationForm from "./components/RegistrationForm";
 import AdminDashboard from "./components/AdminDashboard";
+import FeedbackForm from "./components/FeedbackForm";
+import CommunityRegistrationForm from "./components/CommunityRegistrationForm";
 import { StudentRegistration } from "./types";
 import Z444Logo from "./components/Z444Logo";
 import { 
@@ -29,7 +31,8 @@ import {
   Check,
   CalendarPlus,
   Sun,
-  Moon
+  Moon,
+  MessageSquare
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -46,7 +49,13 @@ export default function App() {
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
   
-  const activeTab = (currentPath === "/z444space" || currentPath.endsWith("/z444space")) ? "admin" : "register";
+  const activeTab = (currentPath === "/z444space" || currentPath.endsWith("/z444space")) 
+    ? "admin" 
+    : (currentPath === "/feedbackform" || currentPath.endsWith("/feedbackform"))
+      ? "feedback"
+      : (currentPath === "/community" || currentPath.endsWith("/community") || currentPath === "/joincommunity" || currentPath.endsWith("/joincommunity"))
+        ? "community"
+        : "register";
   
   // Registration Success state
   const [registrationSuccess, setRegistrationSuccess] = useState<any | null>(null);
@@ -167,10 +176,50 @@ export default function App() {
                   Student Portal
                 </button>
               </div>
+            ) : activeTab === "feedback" ? (
+              <div className="flex items-center gap-3.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 px-3.5 py-1.5 rounded-xl flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  Feedback
+                </span>
+                <button
+                  onClick={() => navigateTo("/")}
+                  className="px-3.5 py-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 transition-colors rounded-xl flex items-center gap-1.5 cursor-pointer border border-transparent dark:border-slate-800"
+                >
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  Student Portal
+                </button>
+              </div>
+            ) : activeTab === "community" ? (
+              <div className="flex items-center gap-3.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/60 px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 animate-fade-in">
+                  <Users className="w-3.5 h-3.5" />
+                  Premium Community
+                </span>
+                <button
+                  onClick={() => navigateTo("/")}
+                  className="px-3.5 py-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 transition-colors rounded-xl flex items-center gap-1.5 cursor-pointer border border-transparent dark:border-slate-800"
+                >
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  Student Portal
+                </button>
+              </div>
             ) : (
-              <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500 text-xs font-semibold">
-                <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                <span>Secure Portal</span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => navigateTo("/community")}
+                  className="px-3 py-1.5 text-xs font-extrabold text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 bg-emerald-50 hover:bg-emerald-100/75 dark:bg-emerald-950/30 dark:hover:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/60 transition-all rounded-xl flex items-center gap-1.5 cursor-pointer hover:scale-[1.03] active:scale-95 shadow-sm font-bold"
+                >
+                  <Users className="w-3.5 h-3.5 text-emerald-500" />
+                  Join Community (INR 244)
+                </button>
+                <button
+                  onClick={() => navigateTo("/feedbackform")}
+                  className="px-3 py-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 bg-indigo-50 hover:bg-indigo-100/70 dark:bg-indigo-950/30 dark:hover:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-900/60 transition-colors rounded-xl flex items-center gap-1.5 cursor-pointer font-bold"
+                >
+                  <MessageSquare className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  Feedback Form
+                </button>
               </div>
             )}
           </div>
@@ -180,7 +229,27 @@ export default function App() {
         <div id="portal-viewspace" className="relative">
           <AnimatePresence mode="wait">
             
-            {activeTab === "register" ? (
+            {activeTab === "feedback" ? (
+              <motion.div
+                key="feedback-flow"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25, cubicBezier: [0.16, 1, 0.3, 1] }}
+              >
+                <FeedbackForm onBack={() => navigateTo("/")} />
+              </motion.div>
+            ) : activeTab === "community" ? (
+              <motion.div
+                key="community-flow"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25, cubicBezier: [0.16, 1, 0.3, 1] }}
+              >
+                <CommunityRegistrationForm onBack={() => navigateTo("/")} />
+              </motion.div>
+            ) : activeTab === "register" ? (
               <motion.div
                 key="register-flow"
                 initial={{ opacity: 0, y: 15 }}

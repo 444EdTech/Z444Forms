@@ -53,6 +53,87 @@
           "description": "Has the June 7th 10AM reminder email been broadcasted"
         }
       }
+    },
+    "Feedback": {
+      "title": "Z444 Masterclass Feedback",
+      "description": "Student feedback entries for the Z444 masterclass experience and suggestions.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique feedback entry ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "The student's full name"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The student's email ID"
+        },
+        "rating": {
+          "type": "integer",
+          "description": "Masterclass satisfaction rating from 1 to 5"
+        },
+        "comments": {
+          "type": "string",
+          "description": "The student's detailed thoughts and feedback"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when feedback was submitted"
+        }
+      },
+      "required": ["name", "email", "rating", "comments", "createdAt"]
+    },
+    "CommunityRegistration": {
+      "title": "Z444 WhatsApp Community Registration",
+      "description": "Registration entries for Joining Z444's WhatsApp premium community including custom screenshot upload verification, amount paid, and approval tracking status.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique registration ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "The student's full name"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The student's email ID"
+        },
+        "phone": {
+          "type": "string",
+          "description": "The student's phone number"
+        },
+        "paymentScreenshot": {
+          "type": "string",
+          "description": "Base64 serialized representation of the screenshot"
+        },
+        "amountPaid": {
+          "type": "integer",
+          "description": "Final paid amount"
+        },
+        "promoApplied": {
+          "type": "string",
+          "description": "Promo code applied by the student"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "approved", "rejected"],
+          "description": "Status of community enrollment request"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when registration was submitted"
+        }
+      },
+      "required": ["id", "name", "email", "phone", "paymentScreenshot", "amountPaid", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -63,6 +144,14 @@
     "/reminders/{reminderId}": {
       "schema": "ReminderStatus",
       "description": "Collection monitoring global background delivery statuses"
+    },
+    "/feedbacks/{feedbackId}": {
+      "schema": "Feedback",
+      "description": "Collection of feedback entries for the Z444 Masterclass"
+    },
+    "/community_registrations/{registrationId}": {
+      "schema": "CommunityRegistration",
+      "description": "Collection of premium WhatsApp Community registrations"
     }
   }
 }

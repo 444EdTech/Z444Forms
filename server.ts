@@ -12,7 +12,8 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: "20mb" }));
+app.use(express.urlencoded({ limit: "20mb", extended: true }));
 
 // Local File-Based database fallback directory
 const DATA_DIR = process.env.VERCEL ? "/tmp" : path.join(process.cwd(), "data");
@@ -24,9 +25,13 @@ if (!fs.existsSync(DATA_DIR)) {
   }
 }
 const REGISTRATIONS_FILE = path.join(DATA_DIR, "registrations.json");
+const FEEDBACK_FILE = path.join(DATA_DIR, "feedbacks.json");
+const COMMUNITY_FILE = path.join(DATA_DIR, "community.json");
 
 // Multi-layered in-memory fallback for serverless container lifespans
 const inMemoryRegistrations: any[] = [];
+const inMemoryFeedbacks: any[] = [];
+const inMemoryCommunity: any[] = [];
 
 // Helper to load registrations locally
 function loadLocalRegistrations(): any[] {
@@ -65,6 +70,87 @@ function saveLocalRegistration(registration: any) {
     fs.writeFileSync(REGISTRATIONS_FILE, JSON.stringify(all, null, 2), "utf-8");
   } catch (err) {
     console.error("Failed to write check-in record to backup file:", err);
+  }
+}
+
+// Helper to load feedbacks locally
+function loadLocalFeedbacks(): any[] {
+  let list: any[] = [];
+  if (fs.existsSync(FEEDBACK_FILE)) {
+    try {
+      const data = fs.readFileSync(FEEDBACK_FILE, "utf-8");
+      list = JSON.parse(data);
+    } catch (e) {
+      console.error("Error reading local feedbacks:", e);
+    }
+  }
+
+  const merged = [...list];
+  for (const item of inMemoryFeedbacks) {
+    if (!merged.some(m => m.id === item.id)) {
+      merged.push(item);
+    }
+  }
+  return merged;
+}
+
+// Helper to save feedbacks locally
+function saveLocalFeedback(feedback: any) {
+  if (!inMemoryFeedbacks.some(m => m.id === feedback.id)) {
+    inMemoryFeedbacks.push(feedback);
+  }
+
+  try {
+    const all = loadLocalFeedbacks();
+    if (!all.some(m => m.id === feedback.id)) {
+      all.push(feedback);
+    }
+    fs.writeFileSync(FEEDBACK_FILE, JSON.stringify(all, null, 2), "utf-8");
+  } catch (err) {
+    console.error("Failed to write feedback record to backup file:", err);
+  }
+}
+
+// Helpers for WhatsApp Community local storage backup
+function loadLocalCommunity(): any[] {
+  let list: any[] = [];
+  if (fs.existsSync(COMMUNITY_FILE)) {
+    try {
+      const data = fs.readFileSync(COMMUNITY_FILE, "utf-8");
+      list = JSON.parse(data);
+    } catch (e) {
+      console.error("Error reading local community records:", e);
+    }
+  }
+
+  const merged = [...list];
+  for (const item of inMemoryCommunity) {
+    if (!merged.some(m => m.id === item.id)) {
+      merged.push(item);
+    }
+  }
+  return merged;
+}
+
+function saveLocalCommunity(item: any) {
+  if (!inMemoryCommunity.some(m => m.id === item.id)) {
+    inMemoryCommunity.push(item);
+  } else {
+    const idx = inMemoryCommunity.findIndex(m => m.id === item.id);
+    if (idx >= 0) inMemoryCommunity[idx] = item;
+  }
+
+  try {
+    const all = loadLocalCommunity();
+    const idx = all.findIndex(m => m.id === item.id);
+    if (idx >= 0) {
+      all[idx] = item;
+    } else {
+      all.push(item);
+    }
+    fs.writeFileSync(COMMUNITY_FILE, JSON.stringify(all, null, 2), "utf-8");
+  } catch (err) {
+    console.error("Failed to write community record to backup file:", err);
   }
 }
 
@@ -286,6 +372,69 @@ if (geminiKey && geminiKey !== "MY_GEMINI_API_KEY") {
 }
 
 // --- API ROUTES ---
+
+// Submit Feedback
+async function handlePostFeedback(req: any, res: any) {
+  try {
+    const { name, email, rating, comments } = req.body;
+
+    // Server-side strict validations
+    if (!name || typeof name !== "string" || name.trim().length === 0 || name.length > 100) {
+      return res.status(400).json({ success: false, message: "Invalid student name. Must be 1-100 characters." });
+    }
+    if (!email || typeof email !== "string" || !email.includes("@") || !email.includes(".") || email.length > 100) {
+      return res.status(400).json({ success: false, message: "Invalid email ID. Please input a valid student email." });
+    }
+    const numRating = Number(rating);
+    if (isNaN(numRating) || numRating < 1 || numRating > 5 || !Number.isInteger(numRating)) {
+      return res.status(400).json({ success: false, message: "Rating must be an integer between 1 and 5." });
+    }
+    if (!comments || typeof comments !== "string" || comments.trim().length === 0 || comments.length > 2000) {
+      return res.status(400).json({ success: false, message: "Invalid comments. Must be 1-[2000] characters." });
+    }
+
+    const feedbackId = "fb_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+    const feedbackItem = {
+      id: feedbackId,
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      rating: numRating,
+      comments: comments.trim(),
+      createdAt: new Date().toISOString()
+    };
+
+    // 1. Save Locally (backup)
+    saveLocalFeedback(feedbackItem);
+
+    // 2. Save securely to Cloud DB
+    let savedToCloud = false;
+    if (firestoreDb) {
+      try {
+        const docRef = firestoreDb.collection("feedbacks").doc(feedbackId);
+        await docRef.set({
+          ...feedbackItem,
+          createdAt: FieldValue.serverTimestamp()
+        });
+        savedToCloud = true;
+        console.log(`Saved feedback ${feedbackId} securely to Cloud Firestore`);
+      } catch (firestoreError: any) {
+        console.error("Firestore feedback sync notification:", firestoreError?.message || firestoreError);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Successfully received feedback entry!",
+      data: feedbackItem,
+      cloudSync: savedToCloud
+    });
+  } catch (err: any) {
+    console.error("Error in feedback submission:", err);
+    return res.status(500).json({ success: false, message: "Internal server error occurred when submitting feedback." });
+  }
+}
+app.post("/feedbackform", handlePostFeedback);
+app.post("/api/feedbackform", handlePostFeedback);
 
 // Submit Registration
 app.post("/api/register", async (req, res) => {
@@ -577,9 +726,399 @@ async function handleGetRegistrations(req: any, res: any) {
   }
 }
 
-// Map both routes so they are fully aligned with the live DB structure
+// Get all WhatsApp Community applications for Admin view
+async function handleGetCommunityRegistrations(req: any, res: any) {
+  try {
+    let list: any[] = [];
+    let source = "local";
+
+    if (firestoreDb) {
+      try {
+        const querySnapshot = await firestoreDb.collection("community_registrations").get();
+        querySnapshot.forEach((docSnap) => {
+          const rawData = docSnap.data();
+          let createdAtStr = rawData.createdAt;
+          if (rawData.createdAt && typeof rawData.createdAt.toDate === "function") {
+            createdAtStr = rawData.createdAt.toDate().toISOString();
+          }
+          list.push({
+            ...rawData,
+            createdAt: createdAtStr
+          });
+        });
+        source = "firestore";
+      } catch (firestoreErr: any) {
+        console.log("Firestore community_registrations read failed, fallback to local:", firestoreErr?.message || firestoreErr);
+      }
+    }
+
+    if (list.length === 0) {
+      list = loadLocalCommunity();
+    }
+
+    // Sort descending by date
+    list.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return res.status(200).json({
+      success: true,
+      count: list.length,
+      registrations: list,
+      dataSource: source
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+app.get("/api/community/registrations", handleGetCommunityRegistrations);
+
+// Student registration for WhatsApp Community
+app.post("/api/community/register", async (req, res) => {
+  try {
+    const { name, email, phone, paymentScreenshot, amountPaid, promoApplied } = req.body;
+
+    if (!name || typeof name !== "string" || name.trim().length === 0 || name.length > 100) {
+      return res.status(400).json({ success: false, message: "Invalid student name. Must be 1-100 characters." });
+    }
+    if (!email || typeof email !== "string" || !email.includes("@") || email.length > 100) {
+      return res.status(400).json({ success: false, message: "Invalid email ID. Please input a valid email." });
+    }
+    if (!phone || typeof phone !== "string" || phone.length < 8 || phone.length > 20) {
+      return res.status(400).json({ success: false, message: "Invalid phone number. Must be between 8 and 20 characters." });
+    }
+    if (!paymentScreenshot || typeof paymentScreenshot !== "string" || paymentScreenshot.length === 0) {
+      return res.status(400).json({ success: false, message: "Payment confirmation screenshot is required." });
+    }
+    const finalAmount = Number(amountPaid);
+    if (finalAmount !== 999 && finalAmount !== 244) {
+      return res.status(400).json({ success: false, message: "Payment amount must be either 999 or 244." });
+    }
+
+    const regId = "com_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+    const commItem = {
+      id: regId,
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      phone: phone.trim(),
+      paymentScreenshot,
+      amountPaid: finalAmount,
+      promoApplied: (promoApplied || "").trim(),
+      status: "pending",
+      createdAt: new Date().toISOString()
+    };
+
+    // 1. Save Locally
+    saveLocalCommunity(commItem);
+
+    // 2. Sync to Cloud DB
+    let savedToCloud = false;
+    if (firestoreDb) {
+      try {
+        const docRef = firestoreDb.collection("community_registrations").doc(regId);
+        await docRef.set({
+          ...commItem,
+          createdAt: FieldValue.serverTimestamp()
+        });
+        savedToCloud = true;
+      } catch (fErr: any) {
+        console.error("Firestore community registration sync fail:", fErr?.message || fErr);
+      }
+    }
+
+    // Try sending initial confirmation email to admin & student if SMTP configured
+    const smtpUser = process.env.SMTP_USER || "444edtech@gmail.com";
+    const smtpPass = process.env.SMTP_PASS;
+    const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
+    const smtpPort = parseInt(process.env.SMTP_PORT || "587");
+    const smtpFrom = process.env.SMTP_FROM || `Z444 Team <${smtpUser}>`;
+
+    if (smtpPass) {
+      try {
+        const transporter = nodemailer.createTransport({
+          host: smtpHost,
+          port: smtpPort,
+          secure: smtpPort === 465,
+          auth: { user: smtpUser, pass: smtpPass }
+        });
+
+        // Email to student "Application received"
+        await transporter.sendMail({
+          from: smtpFrom,
+          to: commItem.email,
+          subject: "Admissions Desk: Z444 WhatsApp Community Application Received",
+          html: `
+            <div style="font-family: sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05);">
+              <div style="background-color: #0f172a; padding: 24px; text-align: center; color: #ffffff;">
+                <h1 style="margin: 0; font-size: 20px; font-weight: 800;">Z444 WhatsApp Community Apply</h1>
+                <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 13px;">Application is pending review</p>
+              </div>
+              <div style="padding: 24px; background-color: #ffffff;">
+                <p>Dear ${commItem.name},</p>
+                <p>We have successfully received your registration details and payment proof for joining Z444's exclusive premium WhatsApp Community.</p>
+                <p><strong>What happens next?</strong><br>Our admissions descriptors are presently verifying your transaction proof. We will complete the review and share your official community invite link via status mail within <strong>1-2 hours</strong>.</p>
+                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin: 16px 0; font-size: 13px;">
+                  <strong>Review Particulars:</strong><br/>
+                  • Name: ${commItem.name}<br/>
+                  • Email: ${commItem.email}<br/>
+                  • Amount verified: INR ${commItem.amountPaid}<br/>
+                  • Code: ${commItem.promoApplied || "None"}<br/>
+                  • ID: ${commItem.id}
+                </div>
+                <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 20px 0;">
+                <p style="font-size: 12px; color: #64748b; margin-bottom: 0; text-align: center;">
+                  Warm regards,<br/><strong>Z444 EdTech Operations Desk</strong>
+                </p>
+              </div>
+            </div>
+          `
+        });
+
+        // Email to admin
+        await transporter.sendMail({
+          from: smtpFrom,
+          to: "444edtech@gmail.com",
+          subject: `New Community Application: ${commItem.name} (INR ${commItem.amountPaid})`,
+          html: `
+            <h3>New premium WhatsApp Community sign-up received!</h3>
+            <ul>
+              <li><strong>Name:</strong> ${commItem.name}</li>
+              <li><strong>Email:</strong> ${commItem.email}</li>
+              <li><strong>Phone:</strong> ${commItem.phone}</li>
+              <li><strong>Amount Verified:</strong> INR ${commItem.amountPaid}</li>
+              <li><strong>Promo Code:</strong> ${commItem.promoApplied || "None"}</li>
+              <li><strong>Registration ID:</strong> ${commItem.id}</li>
+            </ul>
+            <p>Please log in to Z444 Masterclass Control panel (/z444space) to view their screenshot and approve/reject their registration.</p>
+          `
+        });
+      } catch (nodemailerErr: any) {
+        console.error("Nodemailer SMTP failed on community register dispatch:", nodemailerErr);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "WhatsApp community registration successfully received! Awaiting admin review.",
+      registration: commItem,
+      cloudSync: savedToCloud
+    });
+
+  } catch (err: any) {
+    console.error("Error in community register endpoint:", err);
+    return res.status(500).json({ success: false, message: "A server error occurred when submitting registration." });
+  }
+});
+
+// Admin review endpoint (allows approve or reject)
+app.post("/api/community/review", async (req, res) => {
+  try {
+    const { id, status } = req.body;
+
+    if (!id || (status !== "approved" && status !== "rejected")) {
+      return res.status(400).json({ success: false, message: "Invalid parameters requested." });
+    }
+
+    // Load list
+    let list = loadLocalCommunity();
+    let record = list.find(m => m.id === id);
+
+    if (firestoreDb) {
+      try {
+        const docSnap = await firestoreDb.collection("community_registrations").doc(id).get();
+        if (docSnap.exists) {
+          record = docSnap.data();
+        }
+      } catch (firestoreErr) {
+        console.log("Error finding record in Firestore:", firestoreErr);
+      }
+    }
+
+    if (!record) {
+      return res.status(404).json({ success: false, message: "Community application record not found." });
+    }
+
+    record.status = status;
+    saveLocalCommunity(record);
+
+    let savedToCloud = false;
+    if (firestoreDb) {
+      try {
+        await firestoreDb.collection("community_registrations").doc(id).update({
+          status: status
+        });
+        savedToCloud = true;
+      } catch (firestoreErr: any) {
+        console.log("Firestore review sync error:", firestoreErr?.message || firestoreErr);
+      }
+    }
+
+    // Send emails based on review result
+    const smtpUser = process.env.SMTP_USER || "444edtech@gmail.com";
+    const smtpPass = process.env.SMTP_PASS;
+    const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
+    const smtpPort = parseInt(process.env.SMTP_PORT || "587");
+    const smtpFrom = process.env.SMTP_FROM || `Z444 Team <${smtpUser}>`;
+
+    let emailSent = false;
+    let transportMsg = "Simulated";
+
+    let subject = "";
+    let emailHtml = "";
+
+    if (status === "approved") {
+      subject = "Application Approved: Welcome to Z444 Premium WhatsApp Community!";
+      emailHtml = `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);">
+          <div style="background-color: #0f172a; padding: 32px 24px; text-align: center; color: #ffffff;">
+            <div style="display: inline-block; background-color: #10b981; color: #ffffff; padding: 6px 12px; font-size: 11px; font-weight: 800; border-radius: 9999px; text-transform: uppercase; margin-bottom: 12px;">APPLICATION APPROVED</div>
+            <h1 style="margin: 0; font-size: 24px; font-weight: 800; color: #f8fafc; tracking-tight: -0.025em;">Welcome to Z444 Premium Community</h1>
+            <p style="margin: 6px 0 0 0; color: #94a3b8; font-size: 13.5px;">Accolades await inside peer workspace</p>
+          </div>
+          
+          <div style="padding: 28px; background-color: #ffffff;">
+            <p style="font-size: 16px; font-weight: 700; margin-top: 0; color: #0f172a;">Dear ${record.name},</p>
+            <p style="margin-top: 4px; font-size: 14.5px; color: #334155;">Fantastic news! Your fee confirmation has been verified and your community application is approved. We are thrilled to welcome you to the premium Z444 WhatsApp Community!</p>
+            
+            <div style="background-color: #f0fdf4; border-left: 4px solid #10b981; padding: 18px; margin: 24px 0; border-radius: 8px;">
+              <p style="margin: 0 0 10px 0; font-weight: 800; color: #065f46; font-size: 13.5px; text-transform: uppercase;">💬 COMMUNITY ADDITION:</p>
+              <p style="margin: 0; font-size: 14px; line-height: 1.7; color: #1e293b;">
+                You will be added <strong>directly</strong> to our private WhatsApp Community by our administrative team. There is no public link to click. Please make sure that your phone number (${record.phone}) is active on WhatsApp.
+              </p>
+            </div>
+
+            <p style="font-size: 14.5px; color: #334155;">If you have any questions or have not been added within 1 to 2 hours, please reach out to us at <strong>444edtech@gmail.com</strong> so our support operations group can assist you immediately.</p>
+            
+            <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 28px 0;">
+            <p style="font-size: 12px; color: #64748b; margin-bottom: 0; text-align: center; line-height: 1.6;">
+              Warm regards,<br>
+              <strong style="color: #0f172a;">Z444 EdTech Operations Team</strong><br>
+              Direct contact: <a href="mailto:444edtech@gmail.com" style="color: #4f46e5; text-decoration: underline;">444edtech@gmail.com</a>
+            </p>
+          </div>
+        </div>
+      `;
+    } else {
+      subject = "Application status update: Z444 Premium WhatsApp Community Form";
+      emailHtml = `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);">
+          <div style="background-color: #0f172a; padding: 32px 24px; text-align: center; color: #ffffff;">
+            <div style="display: inline-block; background-color: #ef4444; color: #ffffff; padding: 6px 12px; font-size: 11px; font-weight: 800; border-radius: 9999px; text-transform: uppercase; margin-bottom: 12px;">APPLICATION UPDATE</div>
+            <h1 style="margin: 0; font-size: 24px; font-weight: 800; color: #f8fafc; tracking-tight: -0.025em;">Community Application processed</h1>
+            <p style="margin: 6px 0 0 0; color: #94a3b8; font-size: 13.5px;">Pending confirmation feedback</p>
+          </div>
+          
+          <div style="padding: 28px; background-color: #ffffff;">
+            <p style="font-size: 16px; font-weight: 700; margin-top: 0; color: #0f172a;">Dear ${record.name},</p>
+            <p style="margin-top: 4px; font-size: 14.5px; color: #334155;">Thank you for your interest in joining the premium Z444 WhatsApp community. Your application has been reviewed but unfortunately, your registration could not be approved at this time under the provided transaction screenshot.</p>
+            
+            <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 18px; margin: 24px 0; border-radius: 8px;">
+              <p style="margin: 0; font-size: 13.5px; line-height: 1.7; color: #991b1b; font-weight: 600;">
+                If you believe this is in error or would like to submit a corrected payment confirmation:
+              </p>
+              <p style="margin: 6px 0 0 0; font-size: 13.5px; color: #334155;">
+                Please write back to us directly at <strong>444edtech@gmail.com</strong> along with your valid fee submission reference. We will inspect and fix your enrollment status right away.
+              </p>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 28px 0;">
+            <p style="font-size: 12px; color: #64748b; margin-bottom: 0; text-align: center; line-height: 1.6;">
+              Warm regards,<br>
+              <strong style="color: #0f172a;">Z444 EdTech Operations Team</strong><br>
+              Direct contact: <a href="mailto:444edtech@gmail.com" style="color: #4f46e5; text-decoration: underline;">444edtech@gmail.com</a>
+            </p>
+          </div>
+        </div>
+      `;
+    }
+
+    if (smtpPass) {
+      try {
+        const transporter = nodemailer.createTransport({
+          host: smtpHost,
+          port: smtpPort,
+          secure: smtpPort === 465,
+          auth: { user: smtpUser, pass: smtpPass }
+        });
+
+        await transporter.sendMail({
+          from: smtpFrom,
+          to: record.email,
+          subject: subject,
+          html: emailHtml
+        });
+        emailSent = true;
+        transportMsg = "SMTP NodeMailer";
+      } catch (smtpErr: any) {
+        console.error("Nodemailer SMTP failed in review dispatcher:", smtpErr);
+        transportMsg = `Nodemailer failed: ${smtpErr?.message || smtpErr}`;
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Status updated to ${status} for ${record.name}. Notification email dispatched.`,
+      record,
+      emailSent,
+      transportMethod: transportMsg,
+      cloudSync: savedToCloud
+    });
+
+  } catch (err: any) {
+    console.error("Error in community review endpoint:", err);
+    return res.status(500).json({ success: false, message: "An error occurred during application review processing." });
+  }
+});
+
+// Map routes so they are fully aligned with the live DB structure
 app.get("/api/registrations", handleGetRegistrations);
 app.get("/api/local-registrations", handleGetRegistrations);
+
+// Admin endpoint to view feedbacks
+async function handleGetFeedbacks(req: any, res: any) {
+  try {
+    let list: any[] = [];
+    let source = "local";
+
+    if (firestoreDb) {
+      try {
+        const querySnapshot = await firestoreDb.collection("feedbacks").get();
+        querySnapshot.forEach((docSnap) => {
+          const rawData = docSnap.data();
+          let createdAtStr = rawData.createdAt;
+          if (rawData.createdAt && typeof rawData.createdAt.toDate === "function") {
+            createdAtStr = rawData.createdAt.toDate().toISOString();
+          }
+          list.push({
+            ...rawData,
+            createdAt: createdAtStr
+          });
+        });
+        source = "firestore";
+        console.log(`Fetched ${list.length} feedbacks directly from secure Cloud Firestore`);
+      } catch (firestoreErr: any) {
+        console.warn("Firestore query notification for feedbacks:", firestoreErr?.message || firestoreErr);
+      }
+    }
+
+    if (list.length === 0) {
+      list = loadLocalFeedbacks();
+      source = "local";
+    }
+
+    return res.status(200).json({ 
+      success: true, 
+      count: list.length, 
+      feedbacks: list, 
+      dataSource: source 
+    });
+  } catch (err: any) {
+    return res.status(500).json({ 
+      success: false, 
+      error: err.message 
+    });
+  }
+}
+app.get("/api/feedbacks", handleGetFeedbacks);
 
 // --- REMINDER SCHEDULER BACKEND DAEMON ---
 

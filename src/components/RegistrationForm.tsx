@@ -133,7 +133,7 @@ export default function RegistrationForm({ onSuccess }: RegistrationFormProps) {
   };
 
   return (
-    <div id="registration-card" className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-850 shadow-2xl shadow-indigo-100/50 dark:shadow-none overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[620px] transition-colors duration-300">
+    <div id="registration-card" className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl shadow-indigo-100/50 dark:shadow-none overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[620px] transition-colors duration-300">
       
       {/* Sidebar Session Overview info */}
       <div className="lg:col-span-5 bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 p-8 lg:p-12 text-white flex flex-col justify-between relative overflow-hidden">
