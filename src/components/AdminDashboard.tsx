@@ -36,6 +36,68 @@ export default function AdminDashboard() {
   const [activeDashboardTab, setActiveDashboardTab] = useState<"registrations" | "feedbacks" | "community">("registrations");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSendingReminder, setIsSendingReminder] = useState(false);
+  const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
+
+  useEffect(() => {
+    const expiry = localStorage.getItem("urgency_email_cooldown_expiry");
+    if (expiry) {
+      const remaining = Math.max(0, Math.ceil((parseInt(expiry) - Date.now()) / 1000));
+      if (remaining > 0) {
+        setCooldownRemaining(remaining);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (cooldownRemaining <= 0) return;
+    const interval = setInterval(() => {
+      setCooldownRemaining((prev) => {
+        if (prev <= 1) {
+          localStorage.removeItem("urgency_email_cooldown_expiry");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [cooldownRemaining]);
+
+  const formatCooldown = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+  };
+
+  const handleSendUrgencyReminder = async () => {
+    if (cooldownRemaining > 0) return;
+    if (!window.confirm("Are you sure you want to trigger the 'Few Hours Remaining' email reminder to all registered candidates? This will send an email alert advising them to get their notepad ready for Sunday at 11:00 AM IST.")) {
+      return;
+    }
+    
+    setIsSendingReminder(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/send-urgency-reminder", { method: "POST" });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setSuccessToast(json.message);
+        setTimeout(() => setSuccessToast(null), 8500);
+        
+        // Setup 10-minute cooldown (600 seconds)
+        const expiryTime = Date.now() + 10 * 60 * 1000;
+        localStorage.setItem("urgency_email_cooldown_expiry", expiryTime.toString());
+        setCooldownRemaining(600);
+      } else {
+        setError(json.error || "Failed to trigger email reminders.");
+      }
+    } catch (err) {
+      console.error("Reminder trigger failed:", err);
+      setError("An error occurred while connecting to the email service.");
+    } finally {
+      setIsSendingReminder(false);
+    }
+  };
   
   // Filtering states
   const [searchTerm, setSearchTerm] = useState("");
@@ -243,14 +305,30 @@ export default function AdminDashboard() {
           <p className="text-slate-400 text-xs mt-0.5">Dual-synchronized live student databases & reviewer journals</p>
         </div>
 
-        <button
-          onClick={reloadData}
-          disabled={isLoading}
-          className="relative z-10 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-xs font-bold rounded-xl flex items-center gap-2 border border-slate-700/60 cursor-pointer active:scale-95 transition-all outline-none"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-          Refresh Registry
-        </button>
+        <div className="relative z-10 flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleSendUrgencyReminder}
+            disabled={isSendingReminder || cooldownRemaining > 0}
+            className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 disabled:opacity-60 text-xs font-extrabold rounded-xl flex items-center gap-2 border border-indigo-500/30 shadow-md cursor-pointer active:scale-95 transition-all outline-none font-bold"
+          >
+            <Clock className={`w-3.5 h-3.5 ${isSendingReminder || cooldownRemaining > 0 ? "animate-pulse" : ""}`} />
+            {isSendingReminder 
+              ? "Sending..." 
+              : cooldownRemaining > 0 
+                ? `Resend in ${formatCooldown(cooldownRemaining)}` 
+                : "Send Urgency Reminder Email"
+            }
+          </button>
+
+          <button
+            onClick={reloadData}
+            disabled={isLoading}
+            className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-xs font-bold rounded-xl flex items-center gap-2 border border-slate-700/60 cursor-pointer active:scale-95 transition-all outline-none"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            Refresh Registry
+          </button>
+        </div>
       </div>
 
       {/* Analytics Bento block */}

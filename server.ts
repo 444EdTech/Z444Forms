@@ -1074,6 +1074,144 @@ app.post("/api/community/review", async (req, res) => {
 app.get("/api/registrations", handleGetRegistrations);
 app.get("/api/local-registrations", handleGetRegistrations);
 
+// Admin manual trigger: Send a Few Hours Remaining email reminder to all registered students
+app.post("/api/send-urgency-reminder", async (req, res) => {
+  try {
+    let list: any[] = [];
+    
+    // 1. Fetch from Firestore if possible, fallback to local backup files
+    if (firestoreDb) {
+      try {
+        const querySnapshot = await firestoreDb.collection("registrations").get();
+        querySnapshot.forEach((docSnap) => {
+          list.push(docSnap.data());
+        });
+        console.log(`[Urgency Reminder] Fetched ${list.length} direct registrations from Cloud Firestore`);
+      } catch (firestoreErr: any) {
+        console.warn("[Urgency Reminder] Firestore query notification:", firestoreErr?.message || firestoreErr);
+      }
+    }
+    
+    if (list.length === 0) {
+      list = loadLocalRegistrations();
+      console.log(`[Urgency Reminder] Loaded ${list.length} direct registrations from local back up storage file`);
+    }
+
+    if (list.length === 0) {
+      return res.status(400).json({ success: false, message: "No registered students found in DB to broadcast reminders." });
+    }
+
+    const smtpUser = process.env.SMTP_USER || "444edtech@gmail.com";
+    const smtpPass = process.env.SMTP_PASS;
+    const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
+    const smtpPort = parseInt(process.env.SMTP_PORT || "587");
+    const smtpFrom = process.env.SMTP_FROM || `Z444 Masterclass Team <${smtpUser}>`;
+
+    let transporter: nodemailer.Transporter | null = null;
+    if (smtpPass) {
+      transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpPort === 465,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass
+        }
+      });
+    }
+
+    const subject = "⏳ [Few Hours Remaining] Z444 Masterclass Live Starts Today at 11:00 AM IST!";
+    let emailSentCount = 0;
+    let simulatedCount = 0;
+
+    for (const student of list) {
+      const studentEmail = student.email || "";
+      const studentName = student.name || "Student";
+      
+      if (!studentEmail || !studentEmail.includes("@")) continue;
+
+      const emailHtml = `
+      <div style="font-family: sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+        <div style="background-color: #4f46e5; padding: 24px; text-align: center; color: #ffffff;">
+          <h1 style="margin: 0; font-size: 22px; font-weight: 800;">Z444 Live in a Few Hours! 🚀</h1>
+          <p style="margin: 4px 0 0 0; color: #c7d2fe; font-size: 13px;">Bridging the Gap: College Studies to Industry Job Expectations</p>
+        </div>
+        <div style="padding: 24px; background-color: #ffffff;">
+          <p>Hello <strong>${studentName}</strong>,</p>
+          <p>This is a quick direct call! The highly anticipated <strong>Z444 Masterclass</strong> is starting in just a few hours. Make sure you don't miss this live training masterclass.</p>
+          
+          <div style="background-color: #f5f3ff; border-left: 4px solid #6366f1; padding: 18px; margin: 24px 0; border-radius: 8px;">
+            <p style="margin: 0; font-weight: 800; color: #4338ca; font-size: 13.5px; text-transform: uppercase;">🔥 ACCESS INFORMATION:</p>
+            <p style="margin: 8px 0 0 0; font-size: 14px; line-height: 1.6; color: #1e293b;">
+              ⏰ <strong>Time:</strong> Today, Sunday at 11:00 AM Indian Standard Time (IST) Sharp<br>
+              📍 <strong>Venue:</strong> Google Meet Live Classroom<br>
+              🔗 <strong>Direct Joining link:</strong> <a href="https://meet.google.com/bwi-xehm-peg" style="color: #6366f1; font-weight: bold; text-decoration: underline;">https://meet.google.com/bwi-xehm-peg</a>
+            </p>
+          </div>
+
+          <p><strong>What to prepare and keep handy:</strong></p>
+          <ul style="padding-left: 20px; margin: 12px 0; font-size: 13.5px; color: #334155;">
+            <li style="margin-bottom: 6px;">A notepad, notebook, or pen to take rapid tactical notes.</li>
+            <li style="margin-bottom: 6px;">Be in an environment with high-speed internet capability.</li>
+          </ul>
+
+          <p style="font-size: 13.5px; color: #334155;"><strong>Note:</strong> Log in at least 5 minutes early to secure your spot and avoid capacity constraints on Google Meet.</p>
+
+          <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 24px 0;">
+          <p style="font-size: 13px; color: #64748b; margin-bottom: 0;">
+            Warm regards,<br>
+            <strong>Z444 Masterclass Team</strong><br>
+            <span style="font-size: 11px; color: #94a3b8;">Direct Support: 444edtech@gmail.com</span>
+          </p>
+        </div>
+      </div>
+      `;
+
+      if (transporter) {
+        try {
+          const icalContent = generateIcalEvent(studentName, studentEmail, student.id || "manual-reminder");
+          await transporter.sendMail({
+            from: smtpFrom,
+            to: studentEmail,
+            subject: subject,
+            html: emailHtml,
+            icalEvent: {
+              filename: "invite.ics",
+              method: "REQUEST",
+              content: icalContent
+            },
+            alternatives: [
+              {
+                contentType: 'text/calendar; charset="utf-8"; method=REQUEST',
+                content: icalContent
+              }
+            ]
+          });
+          emailSentCount++;
+        } catch (mailErr) {
+          console.error(`[Manual Reminder] Dispatch failed for ${studentEmail}:`, mailErr);
+        }
+      } else {
+        simulatedCount++;
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: transporter 
+        ? `Successfully sent custom "Few Hours Remaining" urgency email reminder to ${emailSentCount} registered candidates!` 
+        : `Simulated manual dispatch of "Few Hours Remaining" email reminder to ${simulatedCount} students (No SMTP password set on Server).`,
+      count: list.length,
+      sentCount: emailSentCount,
+      simulatedCount: simulatedCount
+    });
+
+  } catch (err: any) {
+    console.error("[Urgency Reminder Endpoint Error]:", err);
+    return res.status(500).json({ success: false, error: err.message || "Internal server error" });
+  }
+});
+
 // Admin endpoint to view feedbacks
 async function handleGetFeedbacks(req: any, res: any) {
   try {

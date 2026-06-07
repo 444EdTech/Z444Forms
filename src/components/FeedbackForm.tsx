@@ -55,7 +55,7 @@ export default function FeedbackForm({ onBack }: FeedbackFormProps) {
     setErrorMessage("");
 
     try {
-      const response = await fetch("/feedbackform", {
+      const response = await fetch("/api/feedbackform", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
