@@ -1121,56 +1121,73 @@ app.post("/api/send-urgency-reminder", async (req, res) => {
     }
 
     const subject = "⏳ [Few Hours Remaining] Z444 Masterclass Live Starts Today at 11:00 AM IST!";
-    let emailSentCount = 0;
-    let simulatedCount = 0;
 
-    for (const student of list) {
-      const studentEmail = student.email || "";
-      const studentName = student.name || "Student";
-      
-      if (!studentEmail || !studentEmail.includes("@")) continue;
+    // Return response immediately to prevent Gateway Timeout (504)
+    res.status(200).json({
+      success: true,
+      message: transporter 
+        ? `Successfully initiated the background batch email broadcast of "Few Hours Remaining" reminders to all ${list.length} registered candidates! This runs safely in the background to prevent timeouts.` 
+        : `Simulated background manual dispatch of "Few Hours Remaining" email reminder to all ${list.length} students (No SMTP password set on Server).`,
+      count: list.length
+    });
 
-      const emailHtml = `
-      <div style="font-family: sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-        <div style="background-color: #4f46e5; padding: 24px; text-align: center; color: #ffffff;">
-          <h1 style="margin: 0; font-size: 22px; font-weight: 800;">Z444 Live in a Few Hours! 🚀</h1>
-          <p style="margin: 4px 0 0 0; color: #c7d2fe; font-size: 13px;">Bridging the Gap: College Studies to Industry Job Expectations</p>
-        </div>
-        <div style="padding: 24px; background-color: #ffffff;">
-          <p>Hello <strong>${studentName}</strong>,</p>
-          <p>This is a quick direct call! The highly anticipated <strong>Z444 Masterclass</strong> is starting in just a few hours. Make sure you don't miss this live training masterclass.</p>
-          
-          <div style="background-color: #f5f3ff; border-left: 4px solid #6366f1; padding: 18px; margin: 24px 0; border-radius: 8px;">
-            <p style="margin: 0; font-weight: 800; color: #4338ca; font-size: 13.5px; text-transform: uppercase;">🔥 ACCESS INFORMATION:</p>
-            <p style="margin: 8px 0 0 0; font-size: 14px; line-height: 1.6; color: #1e293b;">
-              ⏰ <strong>Time:</strong> Today, Sunday at 11:00 AM Indian Standard Time (IST) Sharp<br>
-              📍 <strong>Venue:</strong> Google Meet Live Classroom<br>
-              🔗 <strong>Direct Joining link:</strong> <a href="https://meet.google.com/bwi-xehm-peg" style="color: #6366f1; font-weight: bold; text-decoration: underline;">https://meet.google.com/bwi-xehm-peg</a>
+    if (!transporter) {
+      console.log(`[Background Urgency Broadcast] Simulated background dispatch for ${list.length} students.`);
+      return;
+    }
+
+    // Run actual SMTP transmission loop in non-blocking background context
+    (async () => {
+      console.log(`[Background Urgency Broadcast] Starting background transmission for ${list.length} students...`);
+      let sentCount = 0;
+      let failedCount = 0;
+
+      for (const student of list) {
+        const studentEmail = student.email || "";
+        const studentName = student.name || "Student";
+        
+        if (!studentEmail || !studentEmail.includes("@")) continue;
+
+        const emailHtml = `
+        <div style="font-family: sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+          <div style="background-color: #4f46e5; padding: 24px; text-align: center; color: #ffffff;">
+            <h1 style="margin: 0; font-size: 22px; font-weight: 800;">Z444 Live in a Few Hours! 🚀</h1>
+            <p style="margin: 4px 0 0 0; color: #c7d2fe; font-size: 13px;">Bridging the Gap: College Studies to Industry Job Expectations</p>
+          </div>
+          <div style="padding: 24px; background-color: #ffffff;">
+            <p>Hello <strong>${studentName}</strong>,</p>
+            <p>This is a quick direct call! The highly anticipated <strong>Z444 Masterclass</strong> is starting in just a few hours. Make sure you don't miss this live training masterclass.</p>
+            
+            <div style="background-color: #f5f3ff; border-left: 4px solid #6366f1; padding: 18px; margin: 24px 0; border-radius: 8px;">
+              <p style="margin: 0; font-weight: 800; color: #4338ca; font-size: 13.5px; text-transform: uppercase;">🔥 ACCESS INFORMATION:</p>
+              <p style="margin: 8px 0 0 0; font-size: 14px; line-height: 1.6; color: #1e293b;">
+                ⏰ <strong>Time:</strong> Today, Sunday at 11:00 AM Indian Standard Time (IST) Sharp<br>
+                📍 <strong>Venue:</strong> Google Meet Live Classroom<br>
+                🔗 <strong>Direct Joining link:</strong> <a href="https://meet.google.com/bwi-xehm-peg" style="color: #6366f1; font-weight: bold; text-decoration: underline;">https://meet.google.com/bwi-xehm-peg</a>
+              </p>
+            </div>
+
+            <p><strong>What to prepare and keep handy:</strong></p>
+            <ul style="padding-left: 20px; margin: 12px 0; font-size: 13.5px; color: #334155;">
+              <li style="margin-bottom: 6px;">A notepad, notebook, or pen to take rapid tactical notes.</li>
+              <li style="margin-bottom: 6px;">Be in an environment with high-speed internet capability.</li>
+            </ul>
+
+            <p style="font-size: 13.5px; color: #334155;"><strong>Note:</strong> Log in at least 5 minutes early to secure your spot and avoid capacity constraints on Google Meet.</p>
+
+            <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 24px 0;">
+            <p style="font-size: 13px; color: #64748b; margin-bottom: 0;">
+              Warm regards,<br>
+              <strong>Z444 Masterclass Team</strong><br>
+              <span style="font-size: 11px; color: #94a3b8;">Direct Support: 444edtech@gmail.com</span>
             </p>
           </div>
-
-          <p><strong>What to prepare and keep handy:</strong></p>
-          <ul style="padding-left: 20px; margin: 12px 0; font-size: 13.5px; color: #334155;">
-            <li style="margin-bottom: 6px;">A notepad, notebook, or pen to take rapid tactical notes.</li>
-            <li style="margin-bottom: 6px;">Be in an environment with high-speed internet capability.</li>
-          </ul>
-
-          <p style="font-size: 13.5px; color: #334155;"><strong>Note:</strong> Log in at least 5 minutes early to secure your spot and avoid capacity constraints on Google Meet.</p>
-
-          <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 24px 0;">
-          <p style="font-size: 13px; color: #64748b; margin-bottom: 0;">
-            Warm regards,<br>
-            <strong>Z444 Masterclass Team</strong><br>
-            <span style="font-size: 11px; color: #94a3b8;">Direct Support: 444edtech@gmail.com</span>
-          </p>
         </div>
-      </div>
-      `;
+        `;
 
-      if (transporter) {
         try {
           const icalContent = generateIcalEvent(studentName, studentEmail, student.id || "manual-reminder");
-          await transporter.sendMail({
+          await transporter!.sendMail({
             from: smtpFrom,
             to: studentEmail,
             subject: subject,
@@ -1187,28 +1204,25 @@ app.post("/api/send-urgency-reminder", async (req, res) => {
               }
             ]
           });
-          emailSentCount++;
+          sentCount++;
         } catch (mailErr) {
-          console.error(`[Manual Reminder] Dispatch failed for ${studentEmail}:`, mailErr);
+          console.error(`[Manual Reminder] Background dispatch failed for ${studentEmail}:`, mailErr);
+          failedCount++;
         }
-      } else {
-        simulatedCount++;
+        
+        // Slight throttle delay (150ms) to bypass email client rate limits and SMTP locks
+        await new Promise((resolve) => setTimeout(resolve, 150));
       }
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: transporter 
-        ? `Successfully sent custom "Few Hours Remaining" urgency email reminder to ${emailSentCount} registered candidates!` 
-        : `Simulated manual dispatch of "Few Hours Remaining" email reminder to ${simulatedCount} students (No SMTP password set on Server).`,
-      count: list.length,
-      sentCount: emailSentCount,
-      simulatedCount: simulatedCount
+      console.log(`[Background Urgency Broadcast] Finished dispatching. Sent: ${sentCount}, Failed: ${failedCount}`);
+    })().catch((err) => {
+      console.error("[Background Urgency Broadcast] Exception occurred in background sending loop:", err);
     });
 
   } catch (err: any) {
     console.error("[Urgency Reminder Endpoint Error]:", err);
-    return res.status(500).json({ success: false, error: err.message || "Internal server error" });
+    if (!res.headersSent) {
+      return res.status(500).json({ success: false, error: err.message || "Internal server error" });
+    }
   }
 });
 
@@ -1262,79 +1276,93 @@ app.post("/api/send-feedback-community-email", async (req, res) => {
     }
 
     const subject = "📝 Z444 Masterclass Feedback & Premium WhatsApp Community Admission Link";
-    let emailSentCount = 0;
-    let simulatedCount = 0;
 
-    for (const student of list) {
-      const studentEmail = student.email || "";
-      const studentName = student.name || "Student";
-      
-      if (!studentEmail || !studentEmail.includes("@")) continue;
+    // Return response immediately to prevent Gateway Timeout (504)
+    res.status(200).json({
+      success: true,
+      message: transporter 
+        ? `Successfully initiated the background batch email broadcast of "Feedback & Community Form links" to all ${list.length} registered candidates! This runs safely in the background to prevent timeouts.` 
+        : `Simulated background manual dispatch of "Feedback & Community Form links" email to all ${list.length} students (No SMTP password set on Server).`,
+      count: list.length
+    });
 
-      const emailHtml = `
-      <div style="font-family: sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-        <div style="background-color: #4f46e5; padding: 24px; text-align: center; color: #ffffff;">
-          <h1 style="margin: 0; font-size: 22px; font-weight: 800;">Z444 Workshop Survey & Community 🚀</h1>
-          <p style="margin: 4px 0 0 0; color: #c7d2fe; font-size: 13px;">Your Opinion Matters & Stay Connected! Bridging academia to true industry expectations.</p>
-        </div>
-        <div style="padding: 24px; background-color: #ffffff;">
-          <p>Hello <strong>${studentName}</strong>,</p>
-          <p>Thank you for participating in the <strong>Z444 Masterclass</strong>! To help us improve and continue delivering high-impact workshops, please take 1 minute to fill out our quick reflection and feedback form. In addition, you can now apply to join our exclusive, premium WhatsApp Community!</p>
-          
-          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 20px; margin: 24px 0; border-radius: 12px; text-align: center;">
-            <p style="margin: 0 0 12px 0; font-weight: 800; color: #4f46e5; font-size: 14px; text-transform: uppercase;">📝 SHARE YOUR FEEDBACK</p>
-            <p style="margin: 0 0 16px 0; font-size: 13px; color: #475569;">Submit your honest feedback, satisfaction rating, and comments about your experience.</p>
-            <a href="${feedbackUrl}" style="display: inline-block; background-color: #4f46e5; color: #ffffff; font-weight: bold; text-decoration: none; padding: 10px 20px; border-radius: 8px; font-size: 13px; shadow: 0 2px 4px rgba(79, 70, 229, 0.2);">Fill Out Feedback Form</a>
+    if (!transporter) {
+      console.log(`[Background Feedback Broadcast] Simulated background dispatch for ${list.length} students.`);
+      return;
+    }
+
+    // Run actual SMTP transmission loop in non-blocking background context
+    (async () => {
+      console.log(`[Background Feedback Broadcast] Starting background transmission for ${list.length} students...`);
+      let sentCount = 0;
+      let failedCount = 0;
+
+      for (const student of list) {
+        const studentEmail = student.email || "";
+        const studentName = student.name || "Student";
+        
+        if (!studentEmail || !studentEmail.includes("@")) continue;
+
+        const emailHtml = `
+        <div style="font-family: sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+          <div style="background-color: #4f46e5; padding: 24px; text-align: center; color: #ffffff;">
+            <h1 style="margin: 0; font-size: 22px; font-weight: 800;">Z444 Workshop Survey & Community 🚀</h1>
+            <p style="margin: 4px 0 0 0; color: #c7d2fe; font-size: 13px;">Your Opinion Matters & Stay Connected! Bridging academia to true industry expectations.</p>
           </div>
+          <div style="padding: 24px; background-color: #ffffff;">
+            <p>Hello <strong>${studentName}</strong>,</p>
+            <p>Thank you for participating in the <strong>Z444 Masterclass</strong>! To help us improve and continue delivering high-impact workshops, please take 1 minute to fill out our quick reflection and feedback form. In addition, you can now apply to join our exclusive, premium WhatsApp Community!</p>
+            
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 20px; margin: 24px 0; border-radius: 12px; text-align: center;">
+              <p style="margin: 0 0 12px 0; font-weight: 800; color: #4f46e5; font-size: 14px; text-transform: uppercase;">📝 SHARE YOUR FEEDBACK</p>
+              <p style="margin: 0 0 16px 0; font-size: 13px; color: #475569;">Submit your honest feedback, satisfaction rating, and comments about your experience.</p>
+              <a href="${feedbackUrl}" style="display: inline-block; background-color: #4f46e5; color: #ffffff; font-weight: bold; text-decoration: none; padding: 10px 20px; border-radius: 8px; font-size: 13px; shadow: 0 2px 4px rgba(79, 70, 229, 0.2);">Fill Out Feedback Form</a>
+            </div>
 
-          <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 20px; margin: 24px 0; border-radius: 12px; text-align: center;">
-            <p style="margin: 0 0 12px 0; font-weight: 800; color: #16a34a; font-size: 14px; text-transform: uppercase;">💬 JOIN THE PREMIUM COMMUNITY</p>
-            <p style="margin: 0 0 16px 0; font-size: 13px; color: #166534;">Get direct access to expert guidance, resumes templates, premium job referrals, and live peer chats for INR 244!</p>
-            <a href="${communityUrl}" style="display: inline-block; background-color: #16a34a; color: #ffffff; font-weight: bold; text-decoration: none; padding: 10px 20px; border-radius: 8px; font-size: 13px; shadow: 0 2px 4px rgba(22, 163, 74, 0.2);">Apply to Premium Community</a>
+            <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 20px; margin: 24px 0; border-radius: 12px; text-align: center;">
+              <p style="margin: 0 0 12px 0; font-weight: 800; color: #16a34a; font-size: 14px; text-transform: uppercase;">💬 JOIN THE PREMIUM COMMUNITY</p>
+              <p style="margin: 0 0 16px 0; font-size: 13px; color: #166534;">Get direct access to expert guidance, resumes templates, premium job referrals, and live peer chats for INR 244!</p>
+              <a href="${communityUrl}" style="display: inline-block; background-color: #16a34a; color: #ffffff; font-weight: bold; text-decoration: none; padding: 10px 20px; border-radius: 8px; font-size: 13px; shadow: 0 2px 4px rgba(22, 163, 74, 0.2);">Apply to Premium Community</a>
+            </div>
+
+            <p style="font-size: 13.5px; color: #334155;">Should you have any queries or need specialized assistance during the registration, feel free to reply directly to this email.</p>
+
+            <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 24px 0;">
+            <p style="font-size: 13px; color: #64748b; margin-bottom: 0;">
+              Warm regards,<br>
+              <strong>Z444 EdTech Operations Team</strong><br>
+              <span style="font-size: 11px; color: #94a3b8;">Direct Support: 444edtech@gmail.com</span>
+            </p>
           </div>
-
-          <p style="font-size: 13.5px; color: #334155;">Should you have any queries or need specialized assistance during the registration, feel free to reply directly to this email.</p>
-
-          <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 24px 0;">
-          <p style="font-size: 13px; color: #64748b; margin-bottom: 0;">
-            Warm regards,<br>
-            <strong>Z444 EdTech Operations Team</strong><br>
-            <span style="font-size: 11px; color: #94a3b8;">Direct Support: 444edtech@gmail.com</span>
-          </p>
         </div>
-      </div>
-      `;
+        `;
 
-      if (transporter) {
         try {
-          await transporter.sendMail({
+          await transporter!.sendMail({
             from: smtpFrom,
             to: studentEmail,
             subject: subject,
             html: emailHtml
           });
-          emailSentCount++;
+          sentCount++;
         } catch (mailErr) {
-          console.error(`[Feedback/Community Email] Dispatch failed for ${studentEmail}:`, mailErr);
+          console.error(`[Feedback/Community Email] Background dispatch failed for ${studentEmail}:`, mailErr);
+          failedCount++;
         }
-      } else {
-        simulatedCount++;
+        
+        // Slight throttle delay (150ms) to bypass email client rate limits and SMTP locks
+        await new Promise((resolve) => setTimeout(resolve, 150));
       }
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: transporter 
-        ? `Successfully sent "Feedback & Community Form links" email to ${emailSentCount} registered candidates!` 
-        : `Simulated manual dispatch of "Feedback & Community Form links" email to ${simulatedCount} students (No SMTP password set on Server).`,
-      count: list.length,
-      sentCount: emailSentCount,
-      simulatedCount: simulatedCount
+      console.log(`[Background Feedback Broadcast] Finished dispatching. Sent: ${sentCount}, Failed: ${failedCount}`);
+    })().catch((err) => {
+      console.error("[Background Feedback Broadcast] Exception occurred in background sending loop:", err);
     });
 
   } catch (err: any) {
     console.error("[Feedback/Community Email Endpoint Error]:", err);
-    return res.status(500).json({ success: false, error: err.message || "Internal server error" });
+    if (!res.headersSent) {
+      return res.status(500).json({ success: false, error: err.message || "Internal server error" });
+    }
   }
 });
 
