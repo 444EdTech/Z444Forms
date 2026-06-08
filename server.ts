@@ -1375,7 +1375,7 @@ app.post("/api/send-test-email", async (req, res) => {
     const studentEmail = recipient;
 
     if (template === "urgency") {
-      subject = "⏳ [TEST] Z444 Masterclass Live Starts Today at 11:00 AM IST!";
+      subject = "⏳ Z444 Masterclass Live Starts Today at 11:00 AM IST!";
       emailHtml = `
       <div style="font-family: sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
         <div style="background-color: #4f46e5; padding: 24px; text-align: center; color: #ffffff;">
@@ -1413,7 +1413,7 @@ app.post("/api/send-test-email", async (req, res) => {
       </div>
       `;
     } else {
-      subject = "📝 [TEST] Save Your Links: Z444 Workshop Feedback & Premium WhatsApp Community Admission";
+      subject = "📝 Save Your Links: Z444 Workshop Feedback & Premium WhatsApp Community Admission";
       emailHtml = `
       <div style="font-family: sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
         <div style="background-color: #4f46e5; padding: 24px; text-align: center; color: #ffffff;">
