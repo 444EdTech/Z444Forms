@@ -44,6 +44,21 @@ export default function AdminDashboard() {
   const [selectedPreviewTemplate, setSelectedPreviewTemplate] = useState<"urgency" | "forms" | null>(null);
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testEmailRecipient, setTestEmailRecipient] = useState("444edtech@gmail.com");
+  const [broadcastStatuses, setBroadcastStatuses] = useState<any>(null);
+  const [sendingStates, setSendingStates] = useState<Record<string, "urgency" | "forms" | null>>({});
+  const [deliveryFeedback, setDeliveryFeedback] = useState<Record<string, { status: "success" | "error"; message: string; template: "urgency" | "forms" }>>({});
+
+  const fetchBroadcastStatus = async () => {
+    try {
+      const res = await fetch("/api/broadcast-status");
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setBroadcastStatuses(json.broadcasts);
+      }
+    } catch (err) {
+      console.error("Failed to fetch broadcast statuses", err);
+    }
+  };
 
   useEffect(() => {
     const expiry = localStorage.getItem("urgency_email_cooldown_expiry");
@@ -191,6 +206,42 @@ export default function AdminDashboard() {
     } finally {
       setIsSendingTest(false);
       setIsProcessingAction(null);
+    }
+  };
+
+  const handleSendSingleEmail = async (studentId: string, template: "urgency" | "forms") => {
+    if (sendingStates[studentId]) return;
+
+    setSendingStates(prev => ({ ...prev, [studentId]: template }));
+    try {
+      const res = await fetch("/api/send-single-student-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId, template })
+      });
+      const data = await res.json();
+      if (res.ok && data?.success) {
+        setDeliveryFeedback(prev => ({
+          ...prev,
+          [studentId]: { status: "success", template, message: data.message || "Email delivered successfully" }
+        }));
+        setSuccessToast(data.message || `Successfully sent template to student!`);
+        setTimeout(() => setSuccessToast(null), 6000);
+      } else {
+        const errorText = data?.error || "Error dispatching individual email.";
+        setDeliveryFeedback(prev => ({
+          ...prev,
+          [studentId]: { status: "error", template, message: errorText }
+        }));
+      }
+    } catch (err: any) {
+      console.error(err);
+      setDeliveryFeedback(prev => ({
+        ...prev,
+        [studentId]: { status: "error", template, message: err?.message || "Network request failed" }
+      }));
+    } finally {
+      setSendingStates(prev => ({ ...prev, [studentId]: null }));
     }
   };
   
@@ -348,6 +399,12 @@ export default function AdminDashboard() {
     fetchRegistrations();
     fetchFeedbacks();
     fetchCommunityRegistrations();
+    fetchBroadcastStatus();
+
+    const interval = setInterval(() => {
+      fetchBroadcastStatus();
+    }, 4000);
+    return () => clearInterval(interval);
   }, []);
 
   const filteredRegistrations = registrations.filter(item => {
@@ -447,6 +504,182 @@ export default function AdminDashboard() {
           </button>
         </div>
       </div>
+
+      {/* Real-time Email Campaign Progress Monitor */}
+      {broadcastStatuses && (
+        ((broadcastStatuses.urgency && broadcastStatuses.urgency.status !== "idle") || 
+         (broadcastStatuses.forms && broadcastStatuses.forms.status !== "idle"))
+      ) && (
+        <div className="p-6 bg-slate-900 border border-slate-800 rounded-3xl relative overflow-hidden shadow-lg shadow-slate-950/10 space-y-6">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl" />
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                    ((broadcastStatuses.urgency?.status === "running") || (broadcastStatuses.forms?.status === "running"))
+                      ? "bg-amber-400"
+                      : "bg-emerald-400"
+                  }`}></span>
+                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                    ((broadcastStatuses.urgency?.status === "running") || (broadcastStatuses.forms?.status === "running"))
+                      ? "bg-amber-500"
+                      : "bg-emerald-500"
+                  }`}></span>
+                </span>
+                <h3 className="font-extrabold text-sm text-slate-100 tracking-tight">
+                  Live SMTP Email Broadcasting Campaign Monitor
+                </h3>
+              </div>
+              <p className="text-slate-400 text-xs mt-1">
+                Monitors active background mailing streams. A safe 1.5-second connection delay keeps your personal Gmail or custom SMTP secure from burst limits and security holds.
+              </p>
+            </div>
+            
+            <button
+              onClick={fetchBroadcastStatus}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all outline-none"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Force Refresh
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+            {/* Campaign 1: Urgency reminders */}
+            {broadcastStatuses.urgency && broadcastStatuses.urgency.status !== "idle" && (
+              <div className="bg-slate-950/40 rounded-2xl border border-slate-850 p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-indigo-400 tracking-wider uppercase">⏳ URGENCY REMINDERS CAMPAIGN</span>
+                  <span className={`px-2 py-0.5 text-[9px] font-bold rounded border ${
+                    broadcastStatuses.urgency.status === "running" 
+                      ? "bg-amber-500/15 text-amber-400 border-amber-500/30" 
+                      : broadcastStatuses.urgency.status === "completed"
+                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                      : "bg-slate-800/50 text-slate-400 border-slate-700"
+                  }`}>
+                    {broadcastStatuses.urgency.status.toUpperCase()}
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs text-slate-300">
+                    <span>Progress: {broadcastStatuses.urgency.processed} / {broadcastStatuses.urgency.total} entries</span>
+                    <span className="font-bold text-indigo-400">
+                      {broadcastStatuses.urgency.total > 0 
+                        ? Math.round((broadcastStatuses.urgency.processed / broadcastStatuses.urgency.total) * 100) 
+                        : 0}%
+                    </span>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="w-full bg-slate-850 h-1.5 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-indigo-500 h-full transition-all duration-300"
+                      style={{ width: `${broadcastStatuses.urgency.total > 0 ? (broadcastStatuses.urgency.processed / broadcastStatuses.urgency.total) * 100 : 0}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="bg-slate-900/40 p-2 rounded-xl border border-slate-850/50">
+                    <p className="text-[9px] text-slate-500 font-bold uppercase">Total Checked</p>
+                    <p className="text-xs font-black text-slate-300 mt-0.5">{broadcastStatuses.urgency.processed}</p>
+                  </div>
+                  <div className="bg-slate-900/40 p-2 rounded-xl border border-slate-850/50">
+                    <p className="text-[9px] text-emerald-500/80 font-bold uppercase">Sent Success</p>
+                    <p className="text-xs font-black text-emerald-400 mt-0.5">{broadcastStatuses.urgency.sentCount}</p>
+                  </div>
+                  <div className="bg-slate-900/40 p-2 rounded-xl border border-slate-850/50">
+                    <p className="text-[9px] text-rose-500/80 font-bold uppercase">Errors / Skipped</p>
+                    <p className="text-xs font-black text-rose-400 mt-0.5">{broadcastStatuses.urgency.failedCount}</p>
+                  </div>
+                </div>
+
+                {/* Display Errors if any */}
+                {broadcastStatuses.urgency.errors && broadcastStatuses.urgency.errors.length > 0 && (
+                  <div className="space-y-1.5 mt-2">
+                    <p className="text-[10px] font-black text-rose-400 tracking-wider uppercase">⚠️ BLOCKED / DISPATCH FAILURES ({broadcastStatuses.urgency.errors.length})</p>
+                    <div className="max-h-28 overflow-y-auto bg-rose-950/20 border border-rose-900/30 rounded-xl p-3 text-[10.5px] font-mono space-y-2 divide-y divide-rose-900/15">
+                      {broadcastStatuses.urgency.errors.slice(-15).reverse().map((err: any, idx: number) => (
+                        <div key={idx} className="pt-1.5 first:pt-0">
+                          <span className="text-slate-300 font-bold">{err.name}</span> <span className="text-slate-500">({err.email})</span>:{" "}
+                          <span className="text-rose-400">{err.error}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Campaign 2: Feedback forms */}
+            {broadcastStatuses.forms && broadcastStatuses.forms.status !== "idle" && (
+              <div className="bg-slate-950/40 rounded-2xl border border-slate-850 p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-emerald-400 tracking-wider uppercase">📝 FEEDBACK SURVEY & WhatsApp COMMUNITY</span>
+                  <span className={`px-2 py-0.5 text-[9px] font-bold rounded border ${
+                    broadcastStatuses.forms.status === "running" 
+                      ? "bg-amber-500/15 text-amber-400 border-amber-500/30" 
+                      : broadcastStatuses.forms.status === "completed"
+                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                      : "bg-slate-800/50 text-slate-400 border-slate-700"
+                  }`}>
+                    {broadcastStatuses.forms.status.toUpperCase()}
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs text-slate-300">
+                    <span>Progress: {broadcastStatuses.forms.processed} / {broadcastStatuses.forms.total} entries</span>
+                    <span className="font-bold text-emerald-400">
+                      {broadcastStatuses.forms.total > 0 
+                        ? Math.round((broadcastStatuses.forms.processed / broadcastStatuses.forms.total) * 100) 
+                        : 0}%
+                    </span>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="w-full bg-slate-850 h-1.5 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-emerald-500 h-full transition-all duration-300"
+                      style={{ width: `${broadcastStatuses.forms.total > 0 ? (broadcastStatuses.forms.processed / broadcastStatuses.forms.total) * 100 : 0}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="bg-slate-900/40 p-2 rounded-xl border border-slate-850/50">
+                    <p className="text-[9px] text-slate-500 font-bold uppercase">Total Checked</p>
+                    <p className="text-xs font-black text-slate-300 mt-0.5">{broadcastStatuses.forms.processed}</p>
+                  </div>
+                  <div className="bg-slate-900/40 p-2 rounded-xl border border-slate-850/50">
+                    <p className="text-[9px] text-emerald-500/80 font-bold uppercase">Sent Success</p>
+                    <p className="text-xs font-black text-emerald-400 mt-0.5">{broadcastStatuses.forms.sentCount}</p>
+                  </div>
+                  <div className="bg-slate-900/40 p-2 rounded-xl border border-slate-850/50">
+                    <p className="text-[9px] text-rose-500/80 font-bold uppercase">Errors / Skipped</p>
+                    <p className="text-xs font-black text-rose-400 mt-0.5">{broadcastStatuses.forms.failedCount}</p>
+                  </div>
+                </div>
+
+                {/* Display Errors if any */}
+                {broadcastStatuses.forms.errors && broadcastStatuses.forms.errors.length > 0 && (
+                  <div className="space-y-1.5 mt-2">
+                    <p className="text-[10px] font-black text-rose-400 tracking-wider uppercase">⚠️ BLOCKED / DISPATCH FAILURES ({broadcastStatuses.forms.errors.length})</p>
+                    <div className="max-h-28 overflow-y-auto bg-rose-950/20 border border-rose-900/30 rounded-xl p-3 text-[10.5px] font-mono space-y-2 divide-y divide-rose-900/15">
+                      {broadcastStatuses.forms.errors.slice(-15).reverse().map((err: any, idx: number) => (
+                        <div key={idx} className="pt-1.5 first:pt-0">
+                          <span className="text-slate-300 font-bold">{err.name}</span> <span className="text-slate-500">({err.email})</span>:{" "}
+                          <span className="text-rose-400">{err.error}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Analytics Bento block */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -665,7 +898,8 @@ export default function AdminDashboard() {
                     <th className="p-4">Contact Detail</th>
                     <th className="p-4">B.Tech Year</th>
                     <th className="p-4">Department</th>
-                    <th className="p-4 pr-6">Submitted At</th>
+                    <th className="p-4">Submitted At</th>
+                    <th className="p-4 pr-6 text-right">Direct Dispatch (One-by-One)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-850 text-slate-700 dark:text-slate-300 text-xs font-medium">
@@ -691,7 +925,7 @@ export default function AdminDashboard() {
                           item.btechYear === "2" ? "bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-300 dark:border-emerald-900/40" :
                           item.btechYear === "3" ? "bg-indigo-50 text-indigo-700 border border-indigo-100 dark:bg-indigo-950/20 dark:text-indigo-300 dark:border-indigo-900/40" :
                           item.btechYear === "4" ? "bg-violet-50 text-violet-700 border border-violet-100 dark:bg-violet-950/20 dark:text-violet-300 dark:border-violet-900/40" :
-                          "bg-amber-50 text-amber-700 border border-amber-100 dark:bg-amber-950/20 dark:text-amber-300 dark:border-amber-900/40"
+                          "bg-amber-50 text-amber-750 border border-amber-100 dark:bg-amber-950/20 dark:text-amber-300 dark:border-amber-900/40"
                         }`}>
                           <GraduationCap className="w-3.5 h-3.5" />
                           {item.btechYear === "Completed" ? "Graduate" : `${item.btechYear} Year`}
@@ -703,7 +937,7 @@ export default function AdminDashboard() {
                           <span className="font-bold uppercase text-slate-800 dark:text-slate-200">{item.department}</span>
                         </div>
                       </td>
-                      <td className="p-4 pr-6 text-slate-500 dark:text-slate-400">
+                      <td className="p-4 text-slate-500 dark:text-slate-400 text-slate-500">
                         <div className="flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
                           <span>{new Date(item.createdAt).toLocaleString(undefined, {
@@ -713,6 +947,65 @@ export default function AdminDashboard() {
                             minute: "2-digit"
                           })}</span>
                         </div>
+                      </td>
+                      <td className="p-4 pr-6">
+                        <div className="flex justify-end items-center gap-2">
+                          {/* Urgency Reminder single dispatch button */}
+                          <button
+                            onClick={() => handleSendSingleEmail(item.id, "urgency")}
+                            disabled={sendingStates[item.id] !== undefined && sendingStates[item.id] !== null}
+                            className={`flex items-center gap-1 px-2.5 py-1.5 text-[10.5px] font-bold rounded-lg border cursor-pointer select-none transition-all duration-150 active:scale-95 outline-none
+                              ${sendingStates[item.id] === "urgency"
+                                ? "bg-indigo-500/10 border-indigo-500/30 text-indigo-400"
+                                : "bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-350 hover:bg-slate-100 dark:hover:bg-slate-850"
+                              }
+                            `}
+                            title="Send 'Few Hours Remaining' live classroom access link template"
+                          >
+                            {sendingStates[item.id] === "urgency" ? (
+                              <RefreshCw className="w-3 h-3 animate-spin text-indigo-400" />
+                            ) : (
+                              <Clock className="w-3 h-3 text-indigo-500" />
+                            )}
+                            Urgency
+                          </button>
+
+                          {/* Feedback / WhatsApp Links single dispatch button */}
+                          <button
+                            onClick={() => handleSendSingleEmail(item.id, "forms")}
+                            disabled={sendingStates[item.id] !== undefined && sendingStates[item.id] !== null}
+                            className={`flex items-center gap-1 px-2.5 py-1.5 text-[10.5px] font-bold rounded-lg border cursor-pointer select-none transition-all duration-150 active:scale-95 outline-none
+                              ${sendingStates[item.id] === "forms"
+                                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                                : "bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-350 hover:bg-slate-100 dark:hover:bg-slate-850"
+                              }
+                            `}
+                            title="Send Workshop Survey feedback & Premium WhatsApp community links template"
+                          >
+                            {sendingStates[item.id] === "forms" ? (
+                              <RefreshCw className="w-3 h-3 animate-spin text-emerald-400" />
+                            ) : (
+                              <Send className="w-3 h-3 text-emerald-500" />
+                            )}
+                            Feedback
+                          </button>
+                        </div>
+
+                        {/* Direct delivery status notification feedback */}
+                        {deliveryFeedback[item.id] && (
+                          <div className={`mt-1.5 text-[10px] font-medium leading-tight flex items-start justify-end gap-1 p-1 px-1.5 rounded ${
+                            deliveryFeedback[item.id].status === "success" 
+                              ? "text-emerald-500 dark:text-emerald-400 bg-emerald-500/5 align-right" 
+                              : "text-rose-500 dark:text-rose-400 bg-rose-500/5 align-right"
+                          }`}>
+                            <span className="font-extrabold shrink-0">
+                              {deliveryFeedback[item.id].status === "success" ? "✓" : "⚠"}
+                            </span>
+                            <span className="line-clamp-1 max-w-[200px]" title={deliveryFeedback[item.id].message}>
+                              {deliveryFeedback[item.id].message}
+                            </span>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
