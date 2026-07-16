@@ -1303,7 +1303,6 @@ async function handleGetSubmissions(req: any, res: any) {
 
 app.get("/api/submissions", handleGetSubmissions);
 app.get("/api/resumes", handleGetSubmissions);
-app.get("/api/home-submissions", handleGetSubmissions);
 
 async function handlePostSubmissions(req: any, res: any) {
   try {
@@ -1414,7 +1413,6 @@ async function handlePostSubmissions(req: any, res: any) {
 }
 
 app.post("/api/submissions", handlePostSubmissions);
-app.post("/api/home-submissions", handlePostSubmissions);
 
 // Admin manual trigger: Send a Few Hours Remaining email reminder to all registered students
 app.post("/api/send-urgency-reminder", async (req, res) => {
