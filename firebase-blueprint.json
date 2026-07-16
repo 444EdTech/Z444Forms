@@ -134,6 +134,56 @@
         }
       },
       "required": ["id", "name", "email", "phone", "paymentScreenshot", "amountPaid", "status", "createdAt"]
+    },
+    "Resume": {
+      "title": "Z444 Student Resume",
+      "description": "Details of student profiles and resumes submitted on the home page.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique resume submission ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "The student's full name"
+        },
+        "phone": {
+          "type": "string",
+          "description": "The student's phone number"
+        },
+        "yearOfStudy": {
+          "type": "string",
+          "enum": ["1", "2", "3", "4"],
+          "description": "B.Tech study year"
+        },
+        "branch": {
+          "type": "string",
+          "description": "Engineering branch or department"
+        },
+        "collegeName": {
+          "type": "string",
+          "description": "College Name"
+        },
+        "resumeFileName": {
+          "type": "string",
+          "description": "Uploaded resume filename"
+        },
+        "resumeFileBase64": {
+          "type": "string",
+          "description": "Base64 representation of the uploaded resume"
+        },
+        "resumeUrl": {
+          "type": "string",
+          "description": "Optional online link to the resume"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the profile was submitted"
+        }
+      },
+      "required": ["id", "name", "phone", "yearOfStudy", "branch", "collegeName", "createdAt"]
     }
   },
   "firestore": {
@@ -152,6 +202,10 @@
     "/community_registrations/{registrationId}": {
       "schema": "CommunityRegistration",
       "description": "Collection of premium WhatsApp Community registrations"
+    },
+    "/resumes/{resumeId}": {
+      "schema": "Resume",
+      "description": "Collection of student profile resume submissions"
     }
   }
 }

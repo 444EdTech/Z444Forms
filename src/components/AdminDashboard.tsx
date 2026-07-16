@@ -23,7 +23,10 @@ import {
   Database,
   MessageSquare,
   Star,
-  Send
+  Send,
+  FileText,
+  FileDown,
+  Link
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -31,10 +34,12 @@ export default function AdminDashboard() {
   const [registrations, setRegistrations] = useState<StudentRegistration[]>([]);
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
   const [communityRegistrations, setCommunityRegistrations] = useState<any[]>([]);
+  const [homeSubmissions, setHomeSubmissions] = useState<any[]>([]);
+  const [selectedResume, setSelectedResume] = useState<any | null>(null);
   const [selectedScreenshotUrl, setSelectedScreenshotUrl] = useState<string | null>(null);
   const [isProcessingAction, setIsProcessingAction] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
-  const [activeDashboardTab, setActiveDashboardTab] = useState<"registrations" | "feedbacks" | "community">("registrations");
+  const [activeDashboardTab, setActiveDashboardTab] = useState<"registrations" | "feedbacks" | "community" | "home_submissions">("registrations");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSendingReminder, setIsSendingReminder] = useState(false);
@@ -329,6 +334,25 @@ export default function AdminDashboard() {
     }
   };
 
+  const fetchHomeSubmissions = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/home-submissions");
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setHomeSubmissions(json.submissions || []);
+      } else {
+        setError(json.error || "Failed to fetch profile submissions.");
+      }
+    } catch (err) {
+      console.error("Local profile submissions fetch err:", err);
+      setError("Failed to query profile submissions.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleReviewCommunity = async (id: string, status: "approved" | "rejected") => {
     setIsProcessingAction(id);
     setError(null);
@@ -361,8 +385,10 @@ export default function AdminDashboard() {
       await fetchRegistrations();
     } else if (activeDashboardTab === "feedbacks") {
       await fetchFeedbacks();
-    } else {
+    } else if (activeDashboardTab === "community") {
       await fetchCommunityRegistrations();
+    } else {
+      await fetchHomeSubmissions();
     }
   };
 
@@ -399,6 +425,7 @@ export default function AdminDashboard() {
     fetchRegistrations();
     fetchFeedbacks();
     fetchCommunityRegistrations();
+    fetchHomeSubmissions();
     fetchBroadcastStatus();
 
     const interval = setInterval(() => {
@@ -440,6 +467,17 @@ export default function AdminDashboard() {
 
     const matchesStatus = selectedStatus === "All" || item.status === selectedStatus.toLowerCase();
     return matchesSearch && matchesStatus;
+  });
+
+  const filteredHomeSubmissions = homeSubmissions.filter(item => {
+    const term = searchTerm.toLowerCase();
+    return (
+      item.name.toLowerCase().includes(term) ||
+      item.phone.includes(term) ||
+      item.branch.toLowerCase().includes(term) ||
+      item.collegeName.toLowerCase().includes(term) ||
+      item.yearOfStudy.includes(term)
+    );
   });
 
   return (
@@ -773,6 +811,20 @@ export default function AdminDashboard() {
         >
           <MessageSquare className="w-4 h-4" />
           Student Feedbacks ({feedbacks.length})
+        </button>
+        <button
+          onClick={() => {
+            setActiveDashboardTab("home_submissions");
+            setSearchTerm("");
+          }}
+          className={`pb-3 text-xs font-bold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+            activeDashboardTab === "home_submissions"
+              ? "border-indigo-600 text-indigo-600 dark:border-indigo-500 dark:text-indigo-400"
+              : "border-transparent text-slate-450 dark:text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          Profile Submissions ({homeSubmissions.length})
         </button>
       </div>
 
@@ -1121,7 +1173,7 @@ export default function AdminDashboard() {
               </table>
             </div>
           )
-        ) : (
+        ) : activeDashboardTab === "feedbacks" ? (
           /* List of Feedbacks */
           isLoading ? (
             <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center gap-2">
@@ -1197,13 +1249,137 @@ export default function AdminDashboard() {
               </table>
             </div>
           )
+        ) : (
+          /* List of Home Submissions */
+          isLoading ? (
+            <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center gap-2">
+              <RefreshCw className="w-8 h-8 animate-spin text-indigo-500" />
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-2">Loading Profile Submissions...</p>
+            </div>
+          ) : filteredHomeSubmissions.length === 0 ? (
+            <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center gap-2">
+              <FileText className="w-10 h-10 text-slate-300 dark:text-slate-700" />
+              <p className="text-xs font-bold text-slate-500 mt-2">No profiles match the filter</p>
+              <p className="text-[11px] text-slate-450">Waiting for candidates to submit their profiles</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/20 dark:bg-slate-950/20 text-slate-400 dark:text-slate-500 text-[10px] font-bold uppercase tracking-widest border-b border-slate-200 dark:border-slate-850">
+                    <th className="p-4 pl-6">Student Info</th>
+                    <th className="p-4">Contact</th>
+                    <th className="p-4">Academic details</th>
+                    <th className="p-4">Resume attachment</th>
+                    <th className="p-4 pr-6">Submitted At</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-850 text-slate-700 dark:text-slate-300 text-xs font-medium">
+                  {filteredHomeSubmissions.map((item) => (
+                    <tr key={item.id} className="hover:bg-slate-50/20 dark:hover:bg-slate-950/30 transition-all duration-150">
+                      <td className="p-4 pl-6">
+                        <div className="font-bold text-slate-900 dark:text-white text-sm">{item.name}</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5 font-mono">{item.id}</div>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
+                          <Phone className="w-3.5 h-3.5 text-slate-400" />
+                          <span>{item.phone}</span>
+                        </div>
+                      </td>
+                      <td className="p-4 space-y-1">
+                        <div className="flex items-center gap-1 text-slate-800 dark:text-slate-205">
+                          <span className="font-bold">{item.collegeName}</span>
+                        </div>
+                        <div className="text-[11px] text-slate-455 dark:text-slate-500 font-semibold flex items-center gap-1">
+                          <span>{item.yearOfStudy} Year</span>
+                          <span>•</span>
+                          <span>{item.branch}</span>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        {item.resumeFileBase64 || item.resume ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              onClick={() => {
+                                if (item.resumeFileBase64) {
+                                  let fileType = "application/pdf";
+                                  if (item.resumeFileBase64.startsWith("data:image/")) {
+                                    fileType = "image";
+                                  }
+                                  setSelectedResume({
+                                    name: item.resumeFileName || "resume.pdf",
+                                    data: item.resumeFileBase64,
+                                    type: fileType
+                                  });
+                                } else if (item.resume) {
+                                  setSelectedResume(item.resume);
+                                }
+                              }}
+                              className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-extrabold text-[10.5px] rounded-lg transition-colors border border-indigo-200/30 flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                              View Resume (
+                              {(item.resumeFileName || item.resume?.name) 
+                                ? ((item.resumeFileName || item.resume?.name).length > 15 
+                                    ? (item.resumeFileName || item.resume?.name).substring(0, 15) + '...' 
+                                    : (item.resumeFileName || item.resume?.name)) 
+                                : "File"
+                              })
+                            </button>
+                            <a
+                              href={item.resumeFileBase64 || item.resume?.data}
+                              download={item.resumeFileName || item.resume?.name || "resume.pdf"}
+                              className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white rounded-lg transition-colors cursor-pointer border border-transparent dark:border-slate-800 flex items-center justify-center"
+                              title="Download Attachment"
+                            >
+                              <FileDown className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        ) : null}
+
+                        {item.resumeUrl ? (
+                          <div className="mt-1.5">
+                            <a
+                              href={item.resumeUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] font-extrabold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 hover:underline"
+                            >
+                              <Link className="w-3.5 h-3.5" />
+                              <span>Go to Link</span>
+                            </a>
+                          </div>
+                        ) : null}
+
+                        {!item.resumeFileBase64 && !item.resume && !item.resumeUrl ? (
+                          <span className="text-slate-450 italic text-[11px]">No resume provided</span>
+                        ) : null}
+                      </td>
+                      <td className="p-4 pr-6 text-slate-500 dark:text-slate-400">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                          <span>{new Date(item.createdAt).toLocaleString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit"
+                          })}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
         )}
 
         {/* Database state indicators */}
         <div className="p-5 bg-slate-50/50 dark:bg-slate-950/40 border-t border-slate-200 dark:border-slate-850 flex flex-wrap justify-between items-center gap-3 text-[11px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wider transition-colors duration-300">
           <div className="flex items-center gap-2">
             <Database className="w-4 h-4 text-emerald-500" />
-            <span>Dual Core Storage: Active ({registrations.length} admissions, {feedbacks.length} feedbacks, {communityRegistrations.length} community sign-ups)</span>
+            <span>Dual Core Storage: Active ({registrations.length} admissions, {feedbacks.length} feedbacks, {communityRegistrations.length} community sign-ups, {homeSubmissions.length} profile submissions)</span>
           </div>
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-indigo-500" />
@@ -1249,6 +1425,85 @@ export default function AdminDashboard() {
               </div>
               <div className="p-4 border-t border-slate-150 dark:border-slate-800 text-center bg-slate-50 dark:bg-slate-950 text-[10px] text-slate-450 font-semibold">
                 Please verify details manually against the UPI transaction logs.
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Resume Viewer overlay Modal */}
+      <AnimatePresence>
+        {selectedResume && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-slate-950/80 flex items-center justify-center p-4 backdrop-blur-md"
+            onClick={() => setSelectedResume(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white dark:bg-slate-900 rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xl max-w-4xl w-full h-[85vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-5 border-b border-slate-150 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950">
+                <div className="flex flex-col">
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-indigo-500" />
+                    Resume Viewer: {selectedResume.name || "resume.pdf"}
+                  </h3>
+                  <span className="text-[10px] text-slate-450 mt-0.5">Format: {selectedResume.type || "Unknown type"}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={selectedResume.data}
+                    download={selectedResume.name || "resume.pdf"}
+                    className="p-1.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold leading-normal flex items-center gap-1 cursor-pointer select-none"
+                  >
+                    <FileDown className="w-3.5 h-3.5" />
+                    Download File
+                  </a>
+                  <button
+                    onClick={() => setSelectedResume(null)}
+                    className="p-1.5 px-3 rounded-lg bg-slate-200/65 dark:bg-slate-800 hover:bg-slate-300/65 text-slate-600 dark:text-slate-355 text-xs font-bold leading-normal cursor-pointer select-none"
+                  >
+                    Close Viewer
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-auto bg-slate-100 dark:bg-slate-950 flex flex-col p-4">
+                {selectedResume.type?.includes("pdf") ? (
+                  <iframe
+                    src={selectedResume.data}
+                    className="w-full h-full rounded-xl border border-slate-200 dark:border-slate-800"
+                    title="PDF Document"
+                  />
+                ) : selectedResume.type?.includes("image") ? (
+                  <div className="flex items-center justify-center w-full h-full p-4">
+                    <img
+                      src={selectedResume.data}
+                      alt="Uploaded Resume"
+                      className="max-w-full max-h-full object-contain rounded-xl shadow-md"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                ) : (
+                  <div className="m-auto text-center p-8 max-w-sm space-y-3">
+                    <FileText className="w-12 h-12 text-slate-300 mx-auto" />
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Preview Unavailable</p>
+                    <p className="text-[11px] text-slate-450">This file cannot be previewed directly. Please download the file to view its full contents.</p>
+                    <a
+                      href={selectedResume.data}
+                      download={selectedResume.name || "resume.pdf"}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
+                    >
+                      <FileDown className="w-4 h-4" />
+                      Download Resume File
+                    </a>
+                  </div>
+                )}
               </div>
             </motion.div>
           </motion.div>

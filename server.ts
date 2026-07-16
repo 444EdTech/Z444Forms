@@ -27,11 +27,13 @@ if (!fs.existsSync(DATA_DIR)) {
 const REGISTRATIONS_FILE = path.join(DATA_DIR, "registrations.json");
 const FEEDBACK_FILE = path.join(DATA_DIR, "feedbacks.json");
 const COMMUNITY_FILE = path.join(DATA_DIR, "community.json");
+const SUBMISSIONS_FILE = path.join(DATA_DIR, "home_submissions.json");
 
 // Multi-layered in-memory fallback for serverless container lifespans
 const inMemoryRegistrations: any[] = [];
 const inMemoryFeedbacks: any[] = [];
 const inMemoryCommunity: any[] = [];
+const inMemorySubmissions: any[] = [];
 
 interface BroadcastProgress {
   id: string; // 'urgency' or 'forms'
@@ -172,6 +174,49 @@ function saveLocalCommunity(item: any) {
     fs.writeFileSync(COMMUNITY_FILE, JSON.stringify(all, null, 2), "utf-8");
   } catch (err) {
     console.error("Failed to write community record to backup file:", err);
+  }
+}
+
+// Helpers for Home Submissions local storage backup
+function loadLocalSubmissions(): any[] {
+  let list: any[] = [];
+  if (fs.existsSync(SUBMISSIONS_FILE)) {
+    try {
+      const data = fs.readFileSync(SUBMISSIONS_FILE, "utf-8");
+      list = JSON.parse(data);
+    } catch (e) {
+      console.error("Error reading local submissions records:", e);
+    }
+  }
+
+  const merged = [...list];
+  for (const item of inMemorySubmissions) {
+    if (!merged.some(m => m.id === item.id)) {
+      merged.push(item);
+    }
+  }
+  return merged;
+}
+
+function saveLocalSubmission(item: any) {
+  if (!inMemorySubmissions.some(m => m.id === item.id)) {
+    inMemorySubmissions.push(item);
+  } else {
+    const idx = inMemorySubmissions.findIndex(m => m.id === item.id);
+    if (idx >= 0) inMemorySubmissions[idx] = item;
+  }
+
+  try {
+    const all = loadLocalSubmissions();
+    const idx = all.findIndex(m => m.id === item.id);
+    if (idx >= 0) {
+      all[idx] = item;
+    } else {
+      all.push(item);
+    }
+    fs.writeFileSync(SUBMISSIONS_FILE, JSON.stringify(all, null, 2), "utf-8");
+  } catch (err) {
+    console.error("Failed to write submission record to backup file:", err);
   }
 }
 
@@ -748,6 +793,122 @@ async function handleGetRegistrations(req: any, res: any) {
   }
 }
 
+// Get all Home Submissions for Admin view
+async function handleGetHomeSubmissions(req: any, res: any) {
+  try {
+    let list: any[] = [];
+    let source = "local";
+
+    if (firestoreDb) {
+      try {
+        const querySnapshot = await firestoreDb.collection("home_submissions").get();
+        querySnapshot.forEach((docSnap) => {
+          const rawData = docSnap.data();
+          let createdAtStr = rawData.createdAt;
+          if (rawData.createdAt && typeof rawData.createdAt.toDate === "function") {
+            createdAtStr = rawData.createdAt.toDate().toISOString();
+          }
+          list.push({
+            ...rawData,
+            createdAt: createdAtStr
+          });
+        });
+        source = "firestore";
+      } catch (firestoreErr: any) {
+        console.log("Firestore home_submissions read failed, fallback to local:", firestoreErr?.message || firestoreErr);
+      }
+    }
+
+    if (list.length === 0) {
+      list = loadLocalSubmissions();
+    }
+
+    // Sort descending by date
+    list.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return res.status(200).json({
+      success: true,
+      count: list.length,
+      submissions: list,
+      dataSource: source
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+app.get("/api/home-submissions", handleGetHomeSubmissions);
+
+// Submit Home Form
+app.post("/api/home-submissions", async (req, res) => {
+  try {
+    const { name, phone, yearOfStudy, branch, collegeName, resume } = req.body;
+
+    // Server-side strict validations
+    if (!name || typeof name !== "string" || name.trim().length === 0 || name.length > 100) {
+      return res.status(400).json({ success: false, message: "Invalid name. Must be 1-100 characters." });
+    }
+    const phoneRegex = /^[+]?[0-9\s\-()]{8,20}$/;
+    if (!phone || typeof phone !== "string" || !phoneRegex.test(phone)) {
+      return res.status(400).json({ success: false, message: "Invalid phone number." });
+    }
+    const validYears = ["1", "2", "3", "4"];
+    if (!yearOfStudy || !validYears.includes(String(yearOfStudy))) {
+      return res.status(400).json({ success: false, message: "Year of study must be 1, 2, 3, or 4." });
+    }
+    if (!branch || typeof branch !== "string" || branch.trim().length === 0 || branch.length > 100) {
+      return res.status(400).json({ success: false, message: "Invalid branch name. Must be 1-100 characters." });
+    }
+    if (!collegeName || typeof collegeName !== "string" || collegeName.trim().length === 0 || collegeName.length > 150) {
+      return res.status(400).json({ success: false, message: "Invalid college name. Must be 1-150 characters." });
+    }
+    if (!resume) {
+      return res.status(400).json({ success: false, message: "Resume is required." });
+    }
+
+    const submissionId = "sub_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+    const submissionItem = {
+      id: submissionId,
+      name: name.trim(),
+      phone: phone.trim(),
+      yearOfStudy: String(yearOfStudy),
+      branch: branch.trim(),
+      collegeName: collegeName.trim(),
+      resume, // Storing as { data: string (Base64), name: string, type: string, size: number }
+      createdAt: new Date().toISOString()
+    };
+
+    // 1. Save Locally
+    saveLocalSubmission(submissionItem);
+
+    // 2. Sync to Cloud DB
+    let savedToCloud = false;
+    if (firestoreDb) {
+      try {
+        const docRef = firestoreDb.collection("home_submissions").doc(submissionId);
+        await docRef.set({
+          ...submissionItem,
+          createdAt: FieldValue.serverTimestamp()
+        });
+        savedToCloud = true;
+      } catch (fErr: any) {
+        console.error("Firestore home submission sync fail:", fErr?.message || fErr);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Submission successfully received!",
+      submission: submissionItem,
+      cloudSync: savedToCloud
+    });
+
+  } catch (err: any) {
+    console.error("Error in home submission endpoint:", err);
+    return res.status(500).json({ success: false, message: "A server error occurred when submitting form." });
+  }
+});
+
 // Get all WhatsApp Community applications for Admin view
 async function handleGetCommunityRegistrations(req: any, res: any) {
   try {
@@ -1094,6 +1255,166 @@ app.post("/api/community/review", async (req, res) => {
 // Map routes so they are fully aligned with the live DB structure
 app.get("/api/registrations", handleGetRegistrations);
 app.get("/api/local-registrations", handleGetRegistrations);
+
+// Submissions / Resumes API endpoints
+async function handleGetSubmissions(req: any, res: any) {
+  try {
+    let list: any[] = [];
+    let source = "local";
+
+    if (firestoreDb) {
+      try {
+        const querySnapshot = await firestoreDb.collection("resumes").get();
+        querySnapshot.forEach((docSnap) => {
+          const rawData = docSnap.data();
+          let createdAtStr = rawData.createdAt;
+          if (rawData.createdAt && typeof rawData.createdAt.toDate === "function") {
+            createdAtStr = rawData.createdAt.toDate().toISOString();
+          }
+          list.push({
+            ...rawData,
+            createdAt: createdAtStr
+          });
+        });
+        source = "firestore";
+      } catch (firestoreErr: any) {
+        console.log("Firestore resumes read failed, fallback to local:", firestoreErr?.message || firestoreErr);
+      }
+    }
+
+    if (list.length === 0) {
+      list = loadLocalSubmissions();
+      source = "local";
+    }
+
+    // Sort descending by date
+    list.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return res.status(200).json({
+      success: true,
+      count: list.length,
+      submissions: list,
+      dataSource: source
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+app.get("/api/submissions", handleGetSubmissions);
+app.get("/api/resumes", handleGetSubmissions);
+app.get("/api/home-submissions", handleGetSubmissions);
+
+async function handlePostSubmissions(req: any, res: any) {
+  try {
+    const { name, phone, yearOfStudy, branch, collegeName, resumeFileName, resumeFileBase64, resumeUrl } = req.body;
+
+    if (!name || typeof name !== "string" || name.trim().length === 0 || name.length > 100) {
+      return res.status(400).json({ success: false, message: "Invalid student name. Must be 1-100 characters." });
+    }
+    const phoneRegex = /^[+]?[0-9\s\-()]{8,15}$/;
+    if (!phone || typeof phone !== "string" || !phoneRegex.test(phone)) {
+      return res.status(400).json({ success: false, message: "Invalid phone number. Must be between 8 and 15 digits." });
+    }
+    const validYears = ["1", "2", "3", "4"];
+    if (!yearOfStudy || !validYears.includes(yearOfStudy)) {
+      return res.status(400).json({ success: false, message: "Year of study must be 1, 2, 3, or 4." });
+    }
+    if (!branch || typeof branch !== "string" || branch.trim().length === 0 || branch.length > 100) {
+      return res.status(400).json({ success: false, message: "Invalid branch name. Must be 1-100 characters." });
+    }
+    if (!collegeName || typeof collegeName !== "string" || collegeName.trim().length === 0 || collegeName.length > 200) {
+      return res.status(400).json({ success: false, message: "Invalid college name. Must be 1-200 characters." });
+    }
+
+    const regId = "res_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+    const resumeItem = {
+      id: regId,
+      name: name.trim(),
+      phone: phone.trim(),
+      yearOfStudy,
+      branch: branch.trim(),
+      collegeName: collegeName.trim(),
+      resumeFileName: resumeFileName ? resumeFileName.trim() : null,
+      resumeFileBase64: resumeFileBase64 || null,
+      resumeUrl: resumeUrl ? resumeUrl.trim() : null,
+      createdAt: new Date().toISOString()
+    };
+
+    // 1. Save Locally
+    saveLocalSubmission(resumeItem);
+
+    // 2. Sync to Cloud DB
+    let savedToCloud = false;
+    if (firestoreDb) {
+      try {
+        const docRef = firestoreDb.collection("resumes").doc(regId);
+        await docRef.set({
+          ...resumeItem,
+          createdAt: FieldValue.serverTimestamp()
+        });
+        savedToCloud = true;
+        console.log(`Saved resume submission ${regId} securely to Cloud Firestore`);
+      } catch (fErr: any) {
+        console.error("Firestore resume sync fail:", fErr?.message || fErr);
+      }
+    }
+
+    // Try sending notification to admin if SMTP configured
+    const smtpUser = process.env.SMTP_USER || "444edtech@gmail.com";
+    const smtpPass = process.env.SMTP_PASS;
+    const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
+    const smtpPort = parseInt(process.env.SMTP_PORT || "587");
+    const smtpFrom = process.env.SMTP_FROM || `Z444 Team <${smtpUser}>`;
+
+    if (smtpPass) {
+      try {
+        const transporter = nodemailer.createTransport({
+          host: smtpHost,
+          port: smtpPort,
+          secure: smtpPort === 465,
+          auth: { user: smtpUser, pass: smtpPass }
+        });
+
+        // Email to admin
+        await transporter.sendMail({
+          from: smtpFrom,
+          to: "444edtech@gmail.com",
+          subject: `New Student Resume Submitted: ${resumeItem.name} (${resumeItem.branch})`,
+          html: `
+            <h3>New Resume Form submission received!</h3>
+            <ul>
+              <li><strong>Name:</strong> ${resumeItem.name}</li>
+              <li><strong>Phone:</strong> ${resumeItem.phone}</li>
+              <li><strong>Year of Study:</strong> Year ${resumeItem.yearOfStudy}</li>
+              <li><strong>Branch/Department:</strong> ${resumeItem.branch}</li>
+              <li><strong>College Name:</strong> ${resumeItem.collegeName}</li>
+              <li><strong>File Name:</strong> ${resumeItem.resumeFileName || "N/A"}</li>
+              <li><strong>Resume URL/Link:</strong> ${resumeItem.resumeUrl || "N/A"}</li>
+              <li><strong>Submission ID:</strong> ${resumeItem.id}</li>
+              <li><strong>Submitted At:</strong> ${resumeItem.createdAt}</li>
+            </ul>
+          `
+        });
+      } catch (mailErr: any) {
+        console.error("Failed to send resume email notification:", mailErr);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Resume submission successfully processed!",
+      data: resumeItem,
+      cloudSync: savedToCloud
+    });
+  } catch (err: any) {
+    console.error("Error in resumes submission:", err);
+    return res.status(500).json({ success: false, message: "Internal server error occurred when submitting resume." });
+  }
+}
+
+app.post("/api/submissions", handlePostSubmissions);
+app.post("/api/home-submissions", handlePostSubmissions);
 
 // Admin manual trigger: Send a Few Hours Remaining email reminder to all registered students
 app.post("/api/send-urgency-reminder", async (req, res) => {

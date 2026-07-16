@@ -5,6 +5,8 @@
 
 import React, { useState } from "react";
 import RegistrationForm from "./components/RegistrationForm";
+import ResumeSubmissionForm from "./components/ResumeSubmissionForm";
+import NewRegistrationForm from "./components/NewRegistrationForm";
 import AdminDashboard from "./components/AdminDashboard";
 import FeedbackForm from "./components/FeedbackForm";
 import CommunityRegistrationForm from "./components/CommunityRegistrationForm";
@@ -55,7 +57,11 @@ export default function App() {
       ? "feedback"
       : (currentPath === "/community" || currentPath.endsWith("/community") || currentPath === "/joincommunity" || currentPath.endsWith("/joincommunity"))
         ? "community"
-        : "register";
+        : (currentPath === "/masterclass-registration" || currentPath.endsWith("/masterclass-registration") || currentPath === "/register" || currentPath.endsWith("/register"))
+          ? "register"
+          : (currentPath === "/z444C1" || currentPath.endsWith("/z444C1"))
+            ? "z444c1"
+            : "home";
   
   // Registration Success state
   const [registrationSuccess, setRegistrationSuccess] = useState<any | null>(null);
@@ -204,21 +210,28 @@ export default function App() {
                   Student Portal
                 </button>
               </div>
-            ) : (
+            ) : activeTab === "home" ? null : (
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => navigateTo("/community")}
-                  className="px-3 py-1.5 text-xs font-extrabold text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 bg-emerald-50 hover:bg-emerald-100/75 dark:bg-emerald-950/30 dark:hover:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/60 transition-all rounded-xl flex items-center gap-1.5 cursor-pointer hover:scale-[1.03] active:scale-95 shadow-sm font-bold"
+                  className="px-3 py-1.5 text-xs font-extrabold text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 bg-emerald-50 hover:bg-emerald-100/75 dark:bg-emerald-950/30 dark:hover:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/60 transition-all rounded-xl flex items-center gap-1.5 cursor-pointer hover:scale-[1.03] active:scale-95 shadow-sm"
                 >
                   <Users className="w-3.5 h-3.5 text-emerald-500" />
                   Join Community (INR 244)
                 </button>
                 <button
                   onClick={() => navigateTo("/feedbackform")}
-                  className="px-3 py-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 bg-indigo-50 hover:bg-indigo-100/70 dark:bg-indigo-950/30 dark:hover:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-900/60 transition-colors rounded-xl flex items-center gap-1.5 cursor-pointer font-bold"
+                  className="px-3 py-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 bg-indigo-50 hover:bg-indigo-100/70 dark:bg-indigo-950/30 dark:hover:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-900/60 transition-colors rounded-xl flex items-center gap-1.5 cursor-pointer"
                 >
                   <MessageSquare className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                   Feedback Form
+                </button>
+                <button
+                  onClick={() => navigateTo("/")}
+                  className="px-3 py-1.5 text-xs font-extrabold text-slate-700 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 transition-colors rounded-xl border border-slate-200 dark:border-slate-800 flex items-center gap-1.5 cursor-pointer hover:scale-[1.03] active:scale-95 shadow-sm"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5 text-indigo-500" />
+                  Profile Submission
                 </button>
               </div>
             )}
@@ -405,7 +418,7 @@ export default function App() {
                   </div>
                 )}
               </motion.div>
-            ) : (
+            ) : activeTab === "admin" ? (
               <motion.div
                 key="admin-flow"
                 initial={{ opacity: 0, y: 15 }}
@@ -414,6 +427,26 @@ export default function App() {
                 transition={{ duration: 0.25, cubicBezier: [0.16, 1, 0.3, 1] }}
               >
                 <AdminDashboard />
+              </motion.div>
+            ) : activeTab === "z444c1" ? (
+              <motion.div
+                key="z444c1-flow"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25, cubicBezier: [0.16, 1, 0.3, 1] }}
+              >
+                <NewRegistrationForm />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="home-flow"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25, cubicBezier: [0.16, 1, 0.3, 1] }}
+              >
+                <ResumeSubmissionForm />
               </motion.div>
             )}
 
@@ -425,7 +458,7 @@ export default function App() {
       {/* Styled minimal footer */}
       <footer className="w-full border-t border-slate-200/50 dark:border-slate-800 py-6 mt-16 bg-white dark:bg-slate-900 text-center text-[11px] text-slate-400 dark:text-slate-500 font-semibold tracking-wide uppercase transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p>© 2026 Z444 masterclass series. Bridging academia is our duty.</p>
+          <p>© 2026 Z444 masterclass series.</p>
           <div className="flex gap-4 items-center font-bold text-indigo-500">
             <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Coordinate inbox:</span>
             <a href="mailto:444edtech@gmail.com" className="hover:underline text-indigo-500 dark:text-indigo-400">444edtech@gmail.com</a>

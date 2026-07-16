@@ -57,6 +57,38 @@ service cloud.firestore {
         && data.status is string && (data.status == 'pending' || data.status == 'approved' || data.status == 'rejected')
         && data.createdAt is timestamp;
     }
+
+    // Validate student resumes schema
+    function isValidResume(data) {
+      return data.keys().hasAll(['id', 'name', 'phone', 'yearOfStudy', 'branch', 'collegeName', 'createdAt'])
+        && (data.keys().hasAny(['resumeFileName']) ? (data.resumeFileName == null || data.resumeFileName is string) : true)
+        && (data.keys().hasAny(['resumeFileBase64']) ? (data.resumeFileBase64 == null || data.resumeFileBase64 is string) : true)
+        && (data.keys().hasAny(['resumeUrl']) ? (data.resumeUrl == null || data.resumeUrl is string) : true)
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.phone is string && data.phone.size() >= 8 && data.phone.size() <= 20
+        && data.yearOfStudy is string && (data.yearOfStudy == '1' || data.yearOfStudy == '2' || data.yearOfStudy == '3' || data.yearOfStudy == '4')
+        && data.branch is string && data.branch.size() > 0 && data.branch.size() <= 100
+        && data.collegeName is string && data.collegeName.size() > 0 && data.collegeName.size() <= 200
+        && data.createdAt is timestamp;
+    }
+
+    // Validate home submissions schema
+    function isValidHomeSubmission(data) {
+      return data.keys().hasAll(['id', 'name', 'phone', 'yearOfStudy', 'branch', 'collegeName', 'resume', 'createdAt'])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.phone is string && data.phone.size() >= 8 && data.phone.size() <= 25
+        && data.yearOfStudy is string && (data.yearOfStudy == '1' || data.yearOfStudy == '2' || data.yearOfStudy == '3' || data.yearOfStudy == '4')
+        && data.branch is string && data.branch.size() > 0 && data.branch.size() <= 100
+        && data.collegeName is string && data.collegeName.size() > 0 && data.collegeName.size() <= 200
+        && data.resume is map
+        && data.resume.keys().hasAll(['data', 'name', 'type', 'size'])
+        && data.resume.data is string
+        && data.resume.name is string
+        && data.resume.type is string
+        && data.resume.size is int;
+    }
     
     match /registrations/{registrationId} {
       // Anyone can create a registration, provided it is valid and well-formed
@@ -92,6 +124,24 @@ service cloud.firestore {
       // Updates (approving/rejecting) and reads (admin viewing list) are only allowed by verified admin
       allow list, get, update: if request.auth != null && request.auth.token.email == '444edtech@gmail.com' && request.auth.token.email_verified == true;
       allow delete: if false;
+    }
+
+    match /resumes/{resumeId} {
+      // Anyone can submit a resume if formatted correctly
+      allow create: if isValidId(resumeId) && isValidResume(request.resource.data);
+      
+      // Reading resumes list is isolated to verified admin
+      allow list, get: if request.auth != null && request.auth.token.email == '444edtech@gmail.com' && request.auth.token.email_verified == true;
+      allow update, delete: if false;
+    }
+
+    match /home_submissions/{submissionId} {
+      // Anyone can submit a profile if formatted correctly
+      allow create: if isValidId(submissionId) && isValidHomeSubmission(request.resource.data);
+      
+      // Reading profile submissions is isolated to verified admin
+      allow list, get: if request.auth != null && request.auth.token.email == '444edtech@gmail.com' && request.auth.token.email_verified == true;
+      allow update, delete: if false;
     }
   }
 }
