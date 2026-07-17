@@ -798,12 +798,18 @@ async function handleGetHomeSubmissions(req: any, res: any) {
   try {
     let list: any[] = [];
     let source = "local";
+    const seenIds = new Set<string>();
 
     if (firestoreDb) {
       try {
+        // Fetch from home_submissions collection
         const querySnapshot = await firestoreDb.collection("home_submissions").get();
         querySnapshot.forEach((docSnap) => {
           const rawData = docSnap.data();
+          const itemId = rawData.id || docSnap.id;
+          if (itemId && seenIds.has(itemId)) return;
+          if (itemId) seenIds.add(itemId);
+
           let createdAtStr = rawData.createdAt;
           if (rawData.createdAt && typeof rawData.createdAt.toDate === "function") {
             createdAtStr = rawData.createdAt.toDate().toISOString();
@@ -813,9 +819,28 @@ async function handleGetHomeSubmissions(req: any, res: any) {
             createdAt: createdAtStr
           });
         });
+
+        // Also fetch from resumes collection
+        const resumesSnapshot = await firestoreDb.collection("resumes").get();
+        resumesSnapshot.forEach((docSnap) => {
+          const rawData = docSnap.data();
+          const itemId = rawData.id || docSnap.id;
+          if (itemId && seenIds.has(itemId)) return;
+          if (itemId) seenIds.add(itemId);
+
+          let createdAtStr = rawData.createdAt;
+          if (rawData.createdAt && typeof rawData.createdAt.toDate === "function") {
+            createdAtStr = rawData.createdAt.toDate().toISOString();
+          }
+          list.push({
+            ...rawData,
+            createdAt: createdAtStr
+          });
+        });
+
         source = "firestore";
       } catch (firestoreErr: any) {
-        console.log("Firestore home_submissions read failed, fallback to local:", firestoreErr?.message || firestoreErr);
+        console.log("Firestore home_submissions/resumes read failed, fallback to local:", firestoreErr?.message || firestoreErr);
       }
     }
 
