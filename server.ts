@@ -1,10 +1,11 @@
 import express from "express";
+console.log(">>> SERVER PROCESS STARTING <<<");
 import path from "path";
 import fs from "fs";
 import nodemailer from "nodemailer";
 import { GoogleGenAI } from "@google/genai";
 import admin from "firebase-admin";
-import { getFirestore, Firestore, FieldValue } from "firebase-admin/firestore";
+import { getFirestore } from "firebase-admin/firestore";
 
 import dotenv from "dotenv";
 dotenv.config();
@@ -328,7 +329,7 @@ const firebaseDiagnostics: {
 };
 
 // Initialize Firebase Admin if config exists or env vars are present
-let firestoreDb: Firestore | null = null;
+let firestoreDb: any = null;
 const envProjectId = process.env.FIREBASE_PROJECT_ID;
 const envDatabaseId = process.env.FIREBASE_DATABASE_ID;
 const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
@@ -480,7 +481,7 @@ async function handlePostFeedback(req: any, res: any) {
         const docRef = firestoreDb.collection("feedbacks").doc(feedbackId);
         await docRef.set({
           ...feedbackItem,
-          createdAt: FieldValue.serverTimestamp()
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
         savedToCloud = true;
         console.log(`Saved feedback ${feedbackId} securely to Cloud Firestore`);
@@ -628,7 +629,7 @@ app.post("/api/register", async (req, res) => {
         const docRef = firestoreDb.collection("registrations").doc(registrationId);
         await docRef.set({
           ...registrationItem,
-          createdAt: FieldValue.serverTimestamp()
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
         savedToCloud = true;
         console.log(`Saved registration ${registrationId} securely to Cloud Firestore`);
@@ -803,10 +804,8 @@ async function handleGetHomeSubmissions(req: any, res: any) {
     if (firestoreDb) {
       try {
         // Fetch from home_submissions collection
-        const querySnapshot = await firestoreDb.collection("home_submissions")
-          .select("id", "name", "phone", "email", "yearOfStudy", "branch", "collegeName", "createdAt")
-          .get();
-        querySnapshot.forEach((docSnap) => {
+        const querySnapshot = await firestoreDb.collection("home_submissions").get();
+        querySnapshot.forEach((docSnap: any) => {
           const rawData = docSnap.data();
           const itemId = rawData.id || docSnap.id;
           if (itemId && seenIds.has(itemId)) return;
@@ -816,18 +815,19 @@ async function handleGetHomeSubmissions(req: any, res: any) {
           if (rawData.createdAt && typeof rawData.createdAt.toDate === "function") {
             createdAtStr = rawData.createdAt.toDate().toISOString();
           }
+          
+          // Exclude large resume data from the list view
+          const { resume, ...rest } = rawData;
           list.push({
-            ...rawData,
+            ...rest,
             createdAt: createdAtStr,
-            hasResume: true // Indicate that a resume exists but isn't loaded
+            hasResume: !!(rawData.resume || rawData.resumeFileBase64 || rawData.resumeUrl)
           });
         });
 
         // Also fetch from resumes collection
-        const resumesSnapshot = await firestoreDb.collection("resumes")
-          .select("id", "name", "phone", "email", "yearOfStudy", "branch", "collegeName", "resumeFileName", "resumeUrl", "createdAt")
-          .get();
-        resumesSnapshot.forEach((docSnap) => {
+        const resumesSnapshot = await firestoreDb.collection("resumes").get();
+        resumesSnapshot.forEach((docSnap: any) => {
           const rawData = docSnap.data();
           const itemId = rawData.id || docSnap.id;
           if (itemId && seenIds.has(itemId)) return;
@@ -837,10 +837,13 @@ async function handleGetHomeSubmissions(req: any, res: any) {
           if (rawData.createdAt && typeof rawData.createdAt.toDate === "function") {
             createdAtStr = rawData.createdAt.toDate().toISOString();
           }
+          
+          // Exclude large resume data from the list view
+          const { resumeFileBase64, ...rest } = rawData;
           list.push({
-            ...rawData,
+            ...rest,
             createdAt: createdAtStr,
-            hasResume: !!(rawData.resumeFileName || rawData.resumeUrl) || true
+            hasResume: !!(rawData.resumeFileName || rawData.resumeUrl || rawData.resumeFileBase64)
           });
         });
 
@@ -851,7 +854,14 @@ async function handleGetHomeSubmissions(req: any, res: any) {
     }
 
     if (list.length === 0) {
-      list = loadLocalSubmissions();
+      const localRaw = loadLocalSubmissions();
+      list = localRaw.map((item: any) => {
+        const { resume, resumeFileBase64, ...rest } = item;
+        return {
+          ...rest,
+          hasResume: !!(resume || resumeFileBase64 || item.resumeUrl)
+        };
+      });
     }
 
     // Sort descending by date
@@ -975,7 +985,7 @@ app.post("/api/home-submissions", async (req, res) => {
         const docRef = firestoreDb.collection("home_submissions").doc(submissionId);
         await docRef.set({
           ...submissionItem,
-          createdAt: FieldValue.serverTimestamp()
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
         savedToCloud = true;
       } catch (fErr: any) {
@@ -1087,7 +1097,7 @@ app.post("/api/community/register", async (req, res) => {
         const docRef = firestoreDb.collection("community_registrations").doc(regId);
         await docRef.set({
           ...commItem,
-          createdAt: FieldValue.serverTimestamp()
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
         savedToCloud = true;
       } catch (fErr: any) {
@@ -1442,7 +1452,7 @@ async function handlePostSubmissions(req: any, res: any) {
         const docRef = firestoreDb.collection("resumes").doc(regId);
         await docRef.set({
           ...resumeItem,
-          createdAt: FieldValue.serverTimestamp()
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
         savedToCloud = true;
         console.log(`Saved resume submission ${regId} securely to Cloud Firestore`);
@@ -2558,6 +2568,12 @@ if (!process.env.VERCEL) {
 // Check Server Health
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", firebaseAvailable: !!firestoreDb, geminiAvailable: !!ai });
+});
+
+// Global Error Handler
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error("GLOBAL ERROR:", err);
+  res.status(500).json({ success: false, error: err?.message || "Internal Server Error" });
 });
 
 // Vercel Cron Trigger Endpoint for serverless scheduled events

@@ -26,7 +26,8 @@ import {
   Send,
   FileText,
   FileDown,
-  Link
+  Link,
+  Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -49,6 +50,42 @@ export default function AdminDashboard() {
   const [isSendingForms, setIsSendingForms] = useState(false);
   const [cooldownFormsRemaining, setCooldownFormsRemaining] = useState<number>(0);
   const [selectedPreviewTemplate, setSelectedPreviewTemplate] = useState<"urgency" | "forms" | null>(null);
+
+  const handleDownloadBase64 = (base64Data: string, fileName: string) => {
+    try {
+      if (!base64Data) return;
+      const parts = base64Data.split(",");
+      if (parts.length < 2) return;
+      
+      const contentTypeMatch = parts[0].match(/:(.*?);/);
+      const contentType = contentTypeMatch ? contentTypeMatch[1] : "application/octet-stream";
+      
+      const byteCharacters = atob(parts[1]);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: contentType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+    } catch (err) {
+      console.error("Download failed:", err);
+      const link = document.createElement("a");
+      link.href = base64Data;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testEmailRecipient, setTestEmailRecipient] = useState("444edtech@gmail.com");
   const [broadcastStatuses, setBroadcastStatuses] = useState<any>(null);
@@ -1355,33 +1392,19 @@ export default function AdminDashboard() {
                               disabled={isFetchingResume === item.id}
                               onClick={async () => {
                                 if (item.resumeFileBase64) {
-                                  let fileType = "application/pdf";
-                                  if (item.resumeFileBase64.startsWith("data:image/")) {
-                                    fileType = "image";
-                                  }
-                                  setSelectedResume({
-                                    name: item.resumeFileName || "resume.pdf",
-                                    data: item.resumeFileBase64,
-                                    type: fileType
-                                  });
+                                  handleDownloadBase64(item.resumeFileBase64, item.resumeFileName || "resume.pdf");
                                 } else if (item.resume) {
-                                  setSelectedResume(item.resume);
+                                  handleDownloadBase64(item.resume.data, item.resume.name || "resume.pdf");
                                 } else if (item.hasResume) {
                                   // Fetch on demand
                                   setIsFetchingResume(item.id);
                                   try {
                                     const res = await fetch(`/api/submission-resume/${item.id}`);
                                     const json = await res.json();
-                                    if (json.success) {
-                                      let fileType = "application/pdf";
-                                      if (json.resumeFileBase64?.startsWith("data:image/")) {
-                                        fileType = "image";
-                                      }
-                                      setSelectedResume({
-                                        name: json.resumeFileName || "resume.pdf",
-                                        data: json.resumeFileBase64,
-                                        type: fileType
-                                      });
+                                    if (json.success && json.resumeFileBase64) {
+                                      handleDownloadBase64(json.resumeFileBase64, json.resumeFileName || "resume.pdf");
+                                    } else if (json.success && json.resumeUrl) {
+                                      window.open(json.resumeUrl, '_blank');
                                     } else {
                                       alert("Failed to load resume content.");
                                     }
@@ -1398,9 +1421,9 @@ export default function AdminDashboard() {
                               {isFetchingResume === item.id ? (
                                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                               ) : (
-                                <FileText className="w-3.5 h-3.5" />
+                                <FileDown className="w-3.5 h-3.5" />
                               )}
-                              View Resume (
+                              Download Resume (
                               {(item.resumeFileName || item.resume?.name) 
                                 ? ((item.resumeFileName || item.resume?.name).length > 15 
                                     ? (item.resumeFileName || item.resume?.name).substring(0, 15) + '...' 
@@ -1409,14 +1432,13 @@ export default function AdminDashboard() {
                               })
                             </button>
                             {(item.resumeFileBase64 || item.resume?.data) && (
-                              <a
-                                href={item.resumeFileBase64 || item.resume?.data}
-                                download={item.resumeFileName || item.resume?.name || "resume.pdf"}
+                              <button
+                                onClick={() => handleDownloadBase64(item.resumeFileBase64 || item.resume?.data, item.resumeFileName || item.resume?.name || "resume.pdf")}
                                 className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white rounded-lg transition-colors cursor-pointer border border-transparent dark:border-slate-800 flex items-center justify-center"
                                 title="Download Attachment"
                               >
                                 <FileDown className="w-3.5 h-3.5" />
-                              </a>
+                              </button>
                             )}
                           </div>
                         ) : null}
