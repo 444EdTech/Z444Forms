@@ -867,7 +867,7 @@ app.get("/api/home-submissions", handleGetHomeSubmissions);
 // Submit Home Form
 app.post("/api/home-submissions", async (req, res) => {
   try {
-    const { name, phone, yearOfStudy, branch, collegeName, resume } = req.body;
+    const { name, phone, email, yearOfStudy, branch, collegeName, resume } = req.body;
 
     // Server-side strict validations
     if (!name || typeof name !== "string" || name.trim().length === 0 || name.length > 100) {
@@ -876,6 +876,10 @@ app.post("/api/home-submissions", async (req, res) => {
     const phoneRegex = /^[+]?[0-9\s\-()]{8,20}$/;
     if (!phone || typeof phone !== "string" || !phoneRegex.test(phone)) {
       return res.status(400).json({ success: false, message: "Invalid phone number." });
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || typeof email !== "string" || !emailRegex.test(email.trim())) {
+      return res.status(400).json({ success: false, message: "Invalid email address." });
     }
     const validYears = ["1", "2", "3", "4"];
     if (!yearOfStudy || !validYears.includes(String(yearOfStudy))) {
@@ -896,6 +900,7 @@ app.post("/api/home-submissions", async (req, res) => {
       id: submissionId,
       name: name.trim(),
       phone: phone.trim(),
+      email: email.trim(),
       yearOfStudy: String(yearOfStudy),
       branch: branch.trim(),
       collegeName: collegeName.trim(),
@@ -1331,7 +1336,7 @@ app.get("/api/resumes", handleGetSubmissions);
 
 async function handlePostSubmissions(req: any, res: any) {
   try {
-    const { name, phone, yearOfStudy, branch, collegeName, resumeFileName, resumeFileBase64, resumeUrl } = req.body;
+    const { name, phone, email, yearOfStudy, branch, collegeName, resumeFileName, resumeFileBase64, resumeUrl } = req.body;
 
     if (!name || typeof name !== "string" || name.trim().length === 0 || name.length > 100) {
       return res.status(400).json({ success: false, message: "Invalid student name. Must be 1-100 characters." });
@@ -1339,6 +1344,10 @@ async function handlePostSubmissions(req: any, res: any) {
     const phoneRegex = /^[+]?[0-9\s\-()]{8,15}$/;
     if (!phone || typeof phone !== "string" || !phoneRegex.test(phone)) {
       return res.status(400).json({ success: false, message: "Invalid phone number. Must be between 8 and 15 digits." });
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || typeof email !== "string" || !emailRegex.test(email.trim())) {
+      return res.status(400).json({ success: false, message: "Invalid email address." });
     }
     const validYears = ["1", "2", "3", "4"];
     if (!yearOfStudy || !validYears.includes(yearOfStudy)) {
@@ -1356,6 +1365,7 @@ async function handlePostSubmissions(req: any, res: any) {
       id: regId,
       name: name.trim(),
       phone: phone.trim(),
+      email: email.trim(),
       yearOfStudy,
       branch: branch.trim(),
       collegeName: collegeName.trim(),
@@ -1410,6 +1420,7 @@ async function handlePostSubmissions(req: any, res: any) {
             <ul>
               <li><strong>Name:</strong> ${resumeItem.name}</li>
               <li><strong>Phone:</strong> ${resumeItem.phone}</li>
+              <li><strong>Email:</strong> ${resumeItem.email}</li>
               <li><strong>Year of Study:</strong> Year ${resumeItem.yearOfStudy}</li>
               <li><strong>Branch/Department:</strong> ${resumeItem.branch}</li>
               <li><strong>College Name:</strong> ${resumeItem.collegeName}</li>

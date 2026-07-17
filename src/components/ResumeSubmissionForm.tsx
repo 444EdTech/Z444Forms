@@ -10,6 +10,7 @@ import {
   Loader2, 
   Phone, 
   User, 
+  Mail,
   Briefcase, 
   GraduationCap, 
   School,
@@ -23,6 +24,7 @@ import { motion, AnimatePresence } from "motion/react";
 export default function ResumeSubmissionForm() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [yearOfStudy, setYearOfStudy] = useState<"1" | "2" | "3" | "4" | "">("");
   const [branch, setBranch] = useState("");
   const [collegeName, setCollegeName] = useState("");
@@ -95,6 +97,10 @@ export default function ResumeSubmissionForm() {
     
     if (!name.trim()) return setError("Please input your full name");
     if (!phone.trim()) return setError("Please input your phone number");
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim() || !emailRegex.test(email.trim())) {
+      return setError("Please input a valid email ID");
+    }
     if (!yearOfStudy) return setError("Please select your Year of Study");
     if (!branch.trim()) return setError("Please input your branch/department");
     if (!collegeName.trim()) return setError("Please input your college name");
@@ -115,6 +121,7 @@ export default function ResumeSubmissionForm() {
         body: JSON.stringify({
           name: name.trim(),
           phone: phone.trim(),
+          email: email.trim(),
           yearOfStudy,
           branch: branch.trim(),
           collegeName: collegeName.trim(),
@@ -208,6 +215,24 @@ export default function ResumeSubmissionForm() {
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         placeholder="e.g. +91 9876543210"
+                        className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/35 focus:border-indigo-500 transition-all font-medium text-slate-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Email ID field */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">
+                      Email Address
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="e.g. rahul@example.com"
                         className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/35 focus:border-indigo-500 transition-all font-medium text-slate-900 dark:text-white"
                       />
                     </div>

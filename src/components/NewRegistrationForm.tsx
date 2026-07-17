@@ -7,6 +7,7 @@ import React, { useState, useRef } from "react";
 import { 
   User, 
   Phone, 
+  Mail,
   GraduationCap, 
   BookOpen, 
   School,
@@ -27,6 +28,7 @@ interface NewRegistrationFormProps {
 export default function NewRegistrationForm({ onSuccess }: NewRegistrationFormProps) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [yearOfStudy, setYearOfStudy] = useState<"1" | "2" | "3" | "4" | "">("");
   const [branch, setBranch] = useState("");
   const [collegeName, setCollegeName] = useState("");
@@ -125,6 +127,13 @@ export default function NewRegistrationForm({ onSuccess }: NewRegistrationFormPr
       tempErrors.phone = "Provide a valid phone number (e.g., +919876543210)";
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim()) {
+      tempErrors.email = "Email address is required";
+    } else if (!emailRegex.test(email.trim())) {
+      tempErrors.email = "Provide a valid email ID (e.g., name@example.com)";
+    }
+
     if (!yearOfStudy) {
       tempErrors.yearOfStudy = "Please select your year of study";
     }
@@ -162,6 +171,7 @@ export default function NewRegistrationForm({ onSuccess }: NewRegistrationFormPr
         body: JSON.stringify({
           name: name.trim(),
           phone: phone.trim(),
+          email: email.trim(),
           yearOfStudy,
           branch: branch.trim(),
           collegeName: collegeName.trim(),
@@ -284,6 +294,35 @@ export default function NewRegistrationForm({ onSuccess }: NewRegistrationFormPr
                   <p className="text-[10.5px] font-bold text-rose-500 flex items-center gap-1 mt-1">
                     <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                     {errors.phone}
+                  </p>
+                )}
+              </div>
+
+              {/* Email Input */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-600 dark:text-slate-300 block">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 dark:text-slate-500">
+                    <Mail className="w-4 h-4" />
+                  </span>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="e.g., rahul@example.com"
+                    className={`w-full pl-10 pr-4 py-2.5 bg-slate-50/50 dark:bg-slate-950 border text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-xl text-xs font-semibold focus:outline-none transition-all ${
+                      errors.email 
+                        ? "border-rose-400 focus:border-rose-500 focus:ring-1 focus:ring-rose-200" 
+                        : "border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-100 dark:focus:ring-indigo-950/45"
+                    }`}
+                  />
+                </div>
+                {errors.email && (
+                  <p className="text-[10.5px] font-bold text-rose-500 flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    {errors.email}
                   </p>
                 )}
               </div>

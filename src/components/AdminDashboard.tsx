@@ -36,6 +36,7 @@ export default function AdminDashboard() {
   const [communityRegistrations, setCommunityRegistrations] = useState<any[]>([]);
   const [homeSubmissions, setHomeSubmissions] = useState<any[]>([]);
   const [selectedResume, setSelectedResume] = useState<any | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedScreenshotUrl, setSelectedScreenshotUrl] = useState<string | null>(null);
   const [isProcessingAction, setIsProcessingAction] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
@@ -110,6 +111,46 @@ export default function AdminDashboard() {
     }, 1000);
     return () => clearInterval(interval);
   }, [cooldownFormsRemaining]);
+
+  useEffect(() => {
+    if (!selectedResume || !selectedResume.data) {
+      setPreviewUrl(null);
+      return;
+    }
+
+    const dataURI = selectedResume.data;
+    if (typeof dataURI === "string" && dataURI.startsWith("data:")) {
+      try {
+        const parts = dataURI.split(",");
+        if (parts.length >= 2) {
+          const meta = parts[0];
+          const base64Data = parts[1];
+          const mimeMatch = meta.match(/data:([^;]+)/);
+          const mime = mimeMatch ? mimeMatch[1] : "application/pdf";
+          
+          // Decode base64 to raw bytes
+          const binary = atob(base64Data);
+          const array = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            array[i] = binary.charCodeAt(i);
+          }
+          
+          const blob = new Blob([array], { type: mime });
+          const url = URL.createObjectURL(blob);
+          setPreviewUrl(url);
+
+          // Return clean up to revoke the object URL and prevent memory leaks
+          return () => {
+            URL.revokeObjectURL(url);
+          };
+        }
+      } catch (err) {
+        console.error("Failed to convert data URI to blob URL:", err);
+      }
+    }
+
+    setPreviewUrl(dataURI);
+  }, [selectedResume]);
 
   const formatCooldown = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -474,6 +515,7 @@ export default function AdminDashboard() {
     return (
       item.name.toLowerCase().includes(term) ||
       item.phone.includes(term) ||
+      (item.email && item.email.toLowerCase().includes(term)) ||
       item.branch.toLowerCase().includes(term) ||
       item.collegeName.toLowerCase().includes(term) ||
       item.yearOfStudy.includes(term)
@@ -1282,9 +1324,17 @@ export default function AdminDashboard() {
                         <div className="text-[10px] text-slate-400 mt-0.5 font-mono">{item.id}</div>
                       </td>
                       <td className="p-4">
-                        <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
-                          <Phone className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{item.phone}</span>
+                        <div className="flex flex-col gap-1 text-slate-600 dark:text-slate-400">
+                          <div className="flex items-center gap-1.5">
+                            <Phone className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{item.phone}</span>
+                          </div>
+                          {item.email && (
+                            <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                              <Mail className="w-3.5 h-3.5 text-slate-400" />
+                              <span className="break-all">{item.email}</span>
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="p-4 space-y-1">
@@ -1476,14 +1526,14 @@ export default function AdminDashboard() {
               <div className="flex-1 overflow-auto bg-slate-100 dark:bg-slate-950 flex flex-col p-4">
                 {selectedResume.type?.includes("pdf") ? (
                   <iframe
-                    src={selectedResume.data}
+                    src={previewUrl || selectedResume.data}
                     className="w-full h-full rounded-xl border border-slate-200 dark:border-slate-800"
                     title="PDF Document"
                   />
                 ) : selectedResume.type?.includes("image") ? (
                   <div className="flex items-center justify-center w-full h-full p-4">
                     <img
-                      src={selectedResume.data}
+                      src={previewUrl || selectedResume.data}
                       alt="Uploaded Resume"
                       className="max-w-full max-h-full object-contain rounded-xl shadow-md"
                       referrerPolicy="no-referrer"
