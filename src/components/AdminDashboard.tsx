@@ -51,38 +51,54 @@ export default function AdminDashboard() {
   const [cooldownFormsRemaining, setCooldownFormsRemaining] = useState<number>(0);
   const [selectedPreviewTemplate, setSelectedPreviewTemplate] = useState<"urgency" | "forms" | null>(null);
 
-  const handleDownloadBase64 = (base64Data: string, fileName: string) => {
+  const handleDownloadBase64 = async (base64Data: string, fileName: string) => {
+    if (!base64Data) {
+      console.warn("handleDownloadBase64: No data provided");
+      return;
+    }
+    
     try {
-      if (!base64Data) return;
-      const parts = base64Data.split(",");
-      if (parts.length < 2) return;
+      console.log(`Starting download for ${fileName}...`);
+      // Use fetch to convert base64 data URL to Blob efficiently
+      // This handles the decoding in a separate thread and is memory-efficient
+      const res = await fetch(base64Data);
+      if (!res.ok) throw new Error("Failed to fetch data URL");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
       
-      const contentTypeMatch = parts[0].match(/:(.*?);/);
-      const contentType = contentTypeMatch ? contentTypeMatch[1] : "application/octet-stream";
-      
-      const byteCharacters = atob(parts[1]);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: contentType });
-      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
+      link.style.display = "none";
       link.href = url;
       link.download = fileName;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(url), 100);
+      
+      // Cleanup
+      setTimeout(() => {
+        if (document.body.contains(link)) {
+          document.body.removeChild(link);
+        }
+        window.URL.revokeObjectURL(url);
+      }, 500);
     } catch (err) {
-      console.error("Download failed:", err);
-      const link = document.createElement("a");
-      link.href = base64Data;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      console.error("Download helper error:", err);
+      // Fallback to simple data URL download
+      try {
+        const link = document.createElement("a");
+        link.style.display = "none";
+        link.href = base64Data;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          if (document.body.contains(link)) {
+            document.body.removeChild(link);
+          }
+        }, 500);
+      } catch (fallbackErr) {
+        console.error("Fallback download failed:", fallbackErr);
+        alert("Download failed. Please try again or check the console.");
+      }
     }
   };
 
