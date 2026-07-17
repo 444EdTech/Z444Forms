@@ -39,6 +39,7 @@ export default function AdminDashboard() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedScreenshotUrl, setSelectedScreenshotUrl] = useState<string | null>(null);
   const [isProcessingAction, setIsProcessingAction] = useState<string | null>(null);
+  const [isFetchingResume, setIsFetchingResume] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [activeDashboardTab, setActiveDashboardTab] = useState<"registrations" | "feedbacks" | "community" | "home_submissions">("registrations");
   const [isLoading, setIsLoading] = useState(true);
@@ -1348,10 +1349,11 @@ export default function AdminDashboard() {
                         </div>
                       </td>
                       <td className="p-4">
-                        {item.resumeFileBase64 || item.resume ? (
+                        {(item.resumeFileBase64 || item.resume || item.hasResume) ? (
                           <div className="flex flex-wrap items-center gap-2">
                             <button
-                              onClick={() => {
+                              disabled={isFetchingResume === item.id}
+                              onClick={async () => {
                                 if (item.resumeFileBase64) {
                                   let fileType = "application/pdf";
                                   if (item.resumeFileBase64.startsWith("data:image/")) {
@@ -1364,11 +1366,40 @@ export default function AdminDashboard() {
                                   });
                                 } else if (item.resume) {
                                   setSelectedResume(item.resume);
+                                } else if (item.hasResume) {
+                                  // Fetch on demand
+                                  setIsFetchingResume(item.id);
+                                  try {
+                                    const res = await fetch(`/api/submission-resume/${item.id}`);
+                                    const json = await res.json();
+                                    if (json.success) {
+                                      let fileType = "application/pdf";
+                                      if (json.resumeFileBase64?.startsWith("data:image/")) {
+                                        fileType = "image";
+                                      }
+                                      setSelectedResume({
+                                        name: json.resumeFileName || "resume.pdf",
+                                        data: json.resumeFileBase64,
+                                        type: fileType
+                                      });
+                                    } else {
+                                      alert("Failed to load resume content.");
+                                    }
+                                  } catch (err) {
+                                    console.error("Resume fetch err:", err);
+                                    alert("Network error while fetching resume.");
+                                  } finally {
+                                    setIsFetchingResume(null);
+                                  }
                                 }
                               }}
-                              className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-extrabold text-[10.5px] rounded-lg transition-colors border border-indigo-200/30 flex items-center gap-1.5 cursor-pointer"
+                              className={`px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-extrabold text-[10.5px] rounded-lg transition-colors border border-indigo-200/30 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-wait`}
                             >
-                              <FileText className="w-3.5 h-3.5" />
+                              {isFetchingResume === item.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <FileText className="w-3.5 h-3.5" />
+                              )}
                               View Resume (
                               {(item.resumeFileName || item.resume?.name) 
                                 ? ((item.resumeFileName || item.resume?.name).length > 15 
@@ -1377,14 +1408,16 @@ export default function AdminDashboard() {
                                 : "File"
                               })
                             </button>
-                            <a
-                              href={item.resumeFileBase64 || item.resume?.data}
-                              download={item.resumeFileName || item.resume?.name || "resume.pdf"}
-                              className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white rounded-lg transition-colors cursor-pointer border border-transparent dark:border-slate-800 flex items-center justify-center"
-                              title="Download Attachment"
-                            >
-                              <FileDown className="w-3.5 h-3.5" />
-                            </a>
+                            {(item.resumeFileBase64 || item.resume?.data) && (
+                              <a
+                                href={item.resumeFileBase64 || item.resume?.data}
+                                download={item.resumeFileName || item.resume?.name || "resume.pdf"}
+                                className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white rounded-lg transition-colors cursor-pointer border border-transparent dark:border-slate-800 flex items-center justify-center"
+                                title="Download Attachment"
+                              >
+                                <FileDown className="w-3.5 h-3.5" />
+                              </a>
+                            )}
                           </div>
                         ) : null}
 

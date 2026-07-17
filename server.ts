@@ -803,7 +803,9 @@ async function handleGetHomeSubmissions(req: any, res: any) {
     if (firestoreDb) {
       try {
         // Fetch from home_submissions collection
-        const querySnapshot = await firestoreDb.collection("home_submissions").get();
+        const querySnapshot = await firestoreDb.collection("home_submissions")
+          .select("id", "name", "phone", "email", "yearOfStudy", "branch", "collegeName", "createdAt")
+          .get();
         querySnapshot.forEach((docSnap) => {
           const rawData = docSnap.data();
           const itemId = rawData.id || docSnap.id;
@@ -816,12 +818,15 @@ async function handleGetHomeSubmissions(req: any, res: any) {
           }
           list.push({
             ...rawData,
-            createdAt: createdAtStr
+            createdAt: createdAtStr,
+            hasResume: true // Indicate that a resume exists but isn't loaded
           });
         });
 
         // Also fetch from resumes collection
-        const resumesSnapshot = await firestoreDb.collection("resumes").get();
+        const resumesSnapshot = await firestoreDb.collection("resumes")
+          .select("id", "name", "phone", "email", "yearOfStudy", "branch", "collegeName", "resumeFileName", "resumeUrl", "createdAt")
+          .get();
         resumesSnapshot.forEach((docSnap) => {
           const rawData = docSnap.data();
           const itemId = rawData.id || docSnap.id;
@@ -834,7 +839,8 @@ async function handleGetHomeSubmissions(req: any, res: any) {
           }
           list.push({
             ...rawData,
-            createdAt: createdAtStr
+            createdAt: createdAtStr,
+            hasResume: !!(rawData.resumeFileName || rawData.resumeUrl) || true
           });
         });
 
@@ -863,6 +869,57 @@ async function handleGetHomeSubmissions(req: any, res: any) {
 }
 
 app.get("/api/home-submissions", handleGetHomeSubmissions);
+
+// Get specific resume data by ID
+app.get("/api/submission-resume/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ success: false, message: "ID required" });
+
+    if (firestoreDb) {
+      // Try home_submissions first
+      let doc = await firestoreDb.collection("home_submissions").doc(id).get();
+      if (doc.exists) {
+        const data = doc.data();
+        return res.json({ 
+          success: true, 
+          resume: data?.resume,
+          resumeFileBase64: data?.resume?.data,
+          resumeFileName: data?.resume?.name
+        });
+      }
+
+      // Try resumes second
+      doc = await firestoreDb.collection("resumes").doc(id).get();
+      if (doc.exists) {
+        const data = doc.data();
+        return res.json({ 
+          success: true, 
+          resumeFileBase64: data?.resumeFileBase64,
+          resumeFileName: data?.resumeFileName,
+          resumeUrl: data?.resumeUrl
+        });
+      }
+    }
+
+    // Check local/in-memory if not in Firestore or Firestore disabled
+    const local = loadLocalSubmissions().find(s => s.id === id);
+    if (local) {
+      return res.json({ 
+        success: true, 
+        resume: local.resume,
+        resumeFileBase64: local.resumeFileBase64 || local.resume?.data,
+        resumeFileName: local.resumeFileName || local.resume?.name,
+        resumeUrl: local.resumeUrl
+      });
+    }
+
+    return res.status(404).json({ success: false, message: "Submission not found" });
+  } catch (err: any) {
+    console.error("Fetch resume err:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // Submit Home Form
 app.post("/api/home-submissions", async (req, res) => {
