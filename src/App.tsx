@@ -10,6 +10,8 @@ import NewRegistrationForm from "./components/NewRegistrationForm";
 import AdminDashboard from "./components/AdminDashboard";
 import FeedbackForm from "./components/FeedbackForm";
 import CommunityRegistrationForm from "./components/CommunityRegistrationForm";
+import MockInterviewAdmin from "./components/MockInterviewAdmin";
+import MockInterviewList from "./components/MockInterviewList";
 import { StudentRegistration } from "./types";
 import Z444Logo from "./components/Z444Logo";
 import { 
@@ -34,7 +36,8 @@ import {
   CalendarPlus,
   Sun,
   Moon,
-  MessageSquare
+  MessageSquare,
+  Video
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -53,7 +56,11 @@ export default function App() {
   
   const activeTab = (currentPath === "/z444space" || currentPath.endsWith("/z444space")) 
     ? "admin" 
-    : (currentPath === "/feedbackform" || currentPath.endsWith("/feedbackform"))
+    : (currentPath === "/z444spacemock" || currentPath.endsWith("/z444spacemock"))
+      ? "mockadmin"
+      : (currentPath === "/mock-interviews" || currentPath.endsWith("/mock-interviews"))
+        ? "mocklist"
+        : (currentPath === "/feedbackform" || currentPath.endsWith("/feedbackform"))
       ? "feedback"
       : (currentPath === "/community" || currentPath.endsWith("/community") || currentPath === "/joincommunity" || currentPath.endsWith("/joincommunity"))
         ? "community"
@@ -175,11 +182,53 @@ export default function App() {
                   Control Room
                 </span>
                 <button
+                  onClick={() => navigateTo("/z444spacemock")}
+                  className="px-3.5 py-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 transition-colors rounded-xl flex items-center gap-1.5 cursor-pointer border border-transparent dark:border-slate-800"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  Mock Manager
+                </button>
+                <button
                   onClick={() => navigateTo("/")}
                   className="px-3.5 py-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 transition-colors rounded-xl flex items-center gap-1.5 cursor-pointer border border-transparent dark:border-slate-800"
                 >
                   <GraduationCap className="w-3.5 h-3.5" />
                   Student Portal
+                </button>
+              </div>
+            ) : activeTab === "mockadmin" ? (
+              <div className="flex items-center gap-3.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/40 border border-violet-100 dark:border-violet-900/60 px-3.5 py-1.5 rounded-xl flex items-center gap-1.5">
+                  <Video className="w-3.5 h-3.5" />
+                  Mock Manager
+                </span>
+                <button
+                  onClick={() => navigateTo("/z444space")}
+                  className="px-3.5 py-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 transition-colors rounded-xl flex items-center gap-1.5 cursor-pointer border border-transparent dark:border-slate-800"
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  Control Room
+                </button>
+                <button
+                  onClick={() => navigateTo("/")}
+                  className="px-3.5 py-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 transition-colors rounded-xl flex items-center gap-1.5 cursor-pointer border border-transparent dark:border-slate-800"
+                >
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  Student Portal
+                </button>
+              </div>
+            ) : activeTab === "mocklist" ? (
+              <div className="flex items-center gap-3.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 px-3.5 py-1.5 rounded-xl flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5" />
+                  Interview Schedule
+                </span>
+                <button
+                  onClick={() => navigateTo("/")}
+                  className="px-3.5 py-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 transition-colors rounded-xl flex items-center gap-1.5 cursor-pointer border border-transparent dark:border-slate-800"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  Back
                 </button>
               </div>
             ) : activeTab === "feedback" ? (
@@ -427,6 +476,26 @@ export default function App() {
                 transition={{ duration: 0.25, cubicBezier: [0.16, 1, 0.3, 1] }}
               >
                 <AdminDashboard />
+              </motion.div>
+            ) : activeTab === "mockadmin" ? (
+              <motion.div
+                key="mockadmin-flow"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25, cubicBezier: [0.16, 1, 0.3, 1] }}
+              >
+                <MockInterviewAdmin />
+              </motion.div>
+            ) : activeTab === "mocklist" ? (
+              <motion.div
+                key="mocklist-flow"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25, cubicBezier: [0.16, 1, 0.3, 1] }}
+              >
+                <MockInterviewList />
               </motion.div>
             ) : activeTab === "z444c1" ? (
               <motion.div

@@ -880,6 +880,90 @@ async function handleGetHomeSubmissions(req: any, res: any) {
 
 app.get("/api/home-submissions", handleGetHomeSubmissions);
 
+// Update mock interview details
+app.post("/api/update-mock-interview", async (req, res) => {
+  try {
+    const { id, meetLink, startTime, endTime } = req.body;
+    if (!id) return res.status(400).json({ success: false, message: "ID required" });
+
+    const mockInterview = {
+      meetLink: meetLink || "",
+      startTime: startTime || "",
+      endTime: endTime || "",
+      updatedAt: new Date().toISOString()
+    };
+
+    if (firestoreDb) {
+      // Try home_submissions first
+      const homeRef = firestoreDb.collection("home_submissions").doc(id);
+      const homeDoc = await homeRef.get();
+      if (homeDoc.exists) {
+        await homeRef.update({ mockInterview });
+        return res.json({ success: true, message: "Updated mock interview details" });
+      }
+
+      // Try resumes second
+      const resumeRef = firestoreDb.collection("resumes").doc(id);
+      const resumeDoc = await resumeRef.get();
+      if (resumeDoc.exists) {
+        await resumeRef.update({ mockInterview });
+        return res.json({ success: true, message: "Updated mock interview details" });
+      }
+      
+      return res.status(404).json({ success: false, message: "Submission not found in database" });
+    }
+
+    return res.status(503).json({ success: false, message: "Database not available" });
+  } catch (err: any) {
+    console.error("Update mock interview err:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get all submissions with mock interview details for public view
+app.get("/api/public-mock-interviews", async (req, res) => {
+  try {
+    let list: any[] = [];
+    if (firestoreDb) {
+      // Fetch from home_submissions
+      const homeSnapshot = await firestoreDb.collection("home_submissions").get();
+      homeSnapshot.forEach((doc: any) => {
+        const data = doc.data();
+        if (data.mockInterview && (data.mockInterview.meetLink || data.mockInterview.startTime)) {
+          list.push({
+            id: data.id || doc.id,
+            name: data.name,
+            email: data.email,
+            mockInterview: data.mockInterview
+          });
+        }
+      });
+
+      // Fetch from resumes
+      const resumeSnapshot = await firestoreDb.collection("resumes").get();
+      resumeSnapshot.forEach((doc: any) => {
+        const data = doc.data();
+        if (data.mockInterview && (data.mockInterview.meetLink || data.mockInterview.startTime)) {
+          list.push({
+            id: data.id || doc.id,
+            name: data.name,
+            email: data.email,
+            mockInterview: data.mockInterview
+          });
+        }
+      });
+    }
+    
+    // Sort by name for public view
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    
+    return res.json({ success: true, count: list.length, interviews: list });
+  } catch (err: any) {
+    console.error("Fetch public mock interviews err:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Get specific resume data by ID
 app.get("/api/submission-resume/:id", async (req, res) => {
   try {
