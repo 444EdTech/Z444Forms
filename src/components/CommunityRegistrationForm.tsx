@@ -48,7 +48,7 @@ export default function CommunityRegistrationForm({ onBack }: CommunityRegistrat
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const currentPrice = isPromoApplied ? 244 : 999;
+  const currentPrice = isPromoApplied ? 444 : 999;
 
   // Custom QR Code Generator using qr-code styling (Google Charts QR Code API for premium visual fidelity)
   const upiId = import.meta.env.VITE_UPI_ID || "pallapothuyaswantth@okicici";
@@ -412,7 +412,7 @@ export default function CommunityRegistrationForm({ onBack }: CommunityRegistrat
               </div>
               {isPromoApplied && (
                 <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold flex items-center gap-1 mt-1">
-                  ✓ Promo Code 'Z444' applied successfully! Dropped price to INR 244
+                  ✓ Promo Code 'Z444' applied successfully! Dropped price to INR 444
                 </p>
               )}
               {errors.promo && <p className="text-[10px] text-rose-600 dark:text-rose-400 font-bold">{errors.promo}</p>}
